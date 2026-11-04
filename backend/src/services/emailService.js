@@ -217,6 +217,84 @@ async function sendQRTicketEmail({ guestEmail, guestName, eventTitle, eventDate,
     }
 }
 
+/**
+ * Sends a high-contrast Member QR Pass email to a newly registered member.
+ */
+async function sendMemberPassEmail({ email, name, memberId, secureToken, qrCodeDataUrl, role }) {
+    const fromAddress = process.env.EMAIL_FROM || 'EventHub <onboarding@resend.dev>';
+    const dashboardUrl = `${process.env.FRONTEND_URL || 'http://localhost:5100'}/dashboard`;
+
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>Your EventHub Digital Member Pass</title>
+        <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #020617; color: #f8fafc; margin: 0; padding: 0; }
+            .container { max-width: 550px; margin: 30px auto; background-color: #0f172a; border: 1px solid #334155; border-radius: 16px; overflow: hidden; }
+            .header { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 28px 24px; text-align: center; border-bottom: 1px solid #334155; }
+            .brand { font-size: 20px; font-weight: 800; letter-spacing: 2px; color: #f8fafc; text-transform: uppercase; margin-bottom: 6px; }
+            .badge { display: inline-block; background-color: #1e293b; color: #38bdf8; font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase; border: 1px solid #38bdf8; }
+            .content { padding: 32px 24px; text-align: center; }
+            .qr-wrap { background-color: #ffffff; padding: 16px; border-radius: 16px; display: inline-block; margin: 20px 0; border: 2px solid #38bdf8; }
+            .unique-id { font-family: monospace; font-size: 16px; font-weight: 900; color: #38bdf8; letter-spacing: 2px; }
+            .meta-box { background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-top: 20px; text-align: left; }
+            .btn { display: inline-block; background-color: #38bdf8; color: #020617; font-weight: 800; padding: 12px 28px; border-radius: 10px; text-decoration: none; margin-top: 20px; }
+            .footer { padding: 20px; text-align: center; font-size: 11px; color: #64748b; border-top: 1px solid #1e293b; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="brand">EventHub Platform</div>
+                <div class="badge">Official Member Pass</div>
+            </div>
+            <div class="content">
+                <h2 style="margin:0 0 8px 0; font-size: 22px;">Welcome, ${name}!</h2>
+                <p style="font-size: 13px; color: #94a3b8; margin: 0 0 16px 0;">Your unique digital QR pass has been generated.</p>
+                
+                <div class="qr-wrap">
+                    <img src="${qrCodeDataUrl}" alt="Member QR Code" width="200" height="200" style="display:block;" />
+                </div>
+
+                <div class="unique-id">UNIQUE ID: ${memberId}</div>
+
+                <div class="meta-box">
+                    <p style="margin: 4px 0; font-size: 13px;"><strong>Member:</strong> ${name}</p>
+                    <p style="margin: 4px 0; font-size: 13px;"><strong>Email:</strong> ${email}</p>
+                    <p style="margin: 4px 0; font-size: 13px;"><strong>Role:</strong> ${role.toUpperCase()}</p>
+                    <p style="margin: 4px 0; font-size: 11px; color: #94a3b8;"><strong>Notice:</strong> One-time admission. Expired upon Admin scanning at the gate.</p>
+                </div>
+
+                <a href="${dashboardUrl}" class="btn">Access Member Dashboard</a>
+            </div>
+            <div class="footer">
+                &copy; 2026 EventHub. Present this QR code or Unique ID at the entrance gate scanner.
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+
+    try {
+        if (resendClient) {
+            const data = await resendClient.emails.send({
+                from: fromAddress,
+                to: email,
+                subject: `🎟️ Your EventHub Member Pass [${memberId}]`,
+                html: htmlContent
+            });
+            console.log(`[Email Service] Sent Member QR Pass email to ${email} (ID: ${data.id || 'ok'})`);
+        } else {
+            console.log(`[Member Pass Email Preview] Generated for ${email} with ID ${memberId}`);
+        }
+    } catch (err) {
+        console.error('[Email Service Member Pass Error]', err.message);
+    }
+}
+
 module.exports = {
-    sendQRTicketEmail
+    sendQRTicketEmail,
+    sendMemberPassEmail
 };

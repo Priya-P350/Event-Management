@@ -13,6 +13,14 @@ const usersPg = pgTable('users', {
     phone: varchar('phone', { length: 50 }),
     passwordHash: varchar('password_hash', { length: 255 }).notNull(),
     role: varchar('role', { length: 50 }).notNull().default('guest'),
+    adminId: varchar('admin_id', { length: 100 }).unique(),
+    memberId: varchar('member_id', { length: 100 }),
+    qrCodeData: text('qr_code_data'),
+    qrToken: varchar('qr_token', { length: 255 }),
+    qrStatus: varchar('qr_status', { length: 50 }).notNull().default('active'),
+    qrScannedAt: timestamp('qr_scanned_at', { withTimezone: true }),
+    qrScannedBy: varchar('qr_scanned_by', { length: 255 }),
+    qrDeviceInfo: varchar('qr_device_info', { length: 255 }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
 });
@@ -128,6 +136,14 @@ const usersSqlite = sqliteTable('users', {
     phone: sqliteText('phone'),
     passwordHash: sqliteText('password_hash').notNull(),
     role: sqliteText('role').notNull().default('guest'),
+    adminId: sqliteText('admin_id').unique(),
+    memberId: sqliteText('member_id'),
+    qrCodeData: sqliteText('qr_code_data'),
+    qrToken: sqliteText('qr_token'),
+    qrStatus: sqliteText('qr_status').notNull().default('active'),
+    qrScannedAt: sqliteText('qr_scanned_at'),
+    qrScannedBy: sqliteText('qr_scanned_by'),
+    qrDeviceInfo: sqliteText('qr_device_info'),
     createdAt: sqliteText('created_at').default(sql`CURRENT_TIMESTAMP`),
     updatedAt: sqliteText('updated_at').default(sql`CURRENT_TIMESTAMP`)
 });

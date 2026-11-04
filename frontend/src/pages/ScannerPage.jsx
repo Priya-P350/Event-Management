@@ -3,13 +3,13 @@ import { Html5Qrcode } from 'html5-qrcode';
 import { checkinService, eventService } from '../services/serviceModules';
 import { useToast } from '../context/ToastContext';
 import { 
-  Camera, CheckCircle2, AlertTriangle, XCircle, ShieldCheck
+  Camera, CheckCircle2, AlertTriangle, XCircle, ShieldCheck, QrCode, Sparkles
 } from 'lucide-react';
 
 export const ScannerPage = () => {
   const toast = useToast();
   const [events, setEvents] = useState([]);
-  const [selectedEventId, setSelectedEventId] = useState('');
+  const [selectedEventId, setSelectedEventId] = useState('all');
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState(null);
   const [manualToken, setManualToken] = useState('');
@@ -23,10 +23,7 @@ export const ScannerPage = () => {
     eventService.getEvents()
       .then(res => {
         if (res.success) {
-          setEvents(res.events);
-          if (res.events.length > 0) {
-            setSelectedEventId(res.events[0].id);
-          }
+          setEvents(res.events || []);
         }
       })
       .catch(err => toast.error(err.message));
@@ -46,14 +43,14 @@ export const ScannerPage = () => {
 
       if (type === 'success') {
         osc.frequency.setValueAtTime(880, ctx.currentTime);
-        gain.gain.setValueAtTime(0.15, ctx.currentTime);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.15);
-      } else {
-        osc.frequency.setValueAtTime(220, ctx.currentTime);
         gain.gain.setValueAtTime(0.2, ctx.currentTime);
         osc.start();
-        osc.stop(ctx.currentTime + 0.35);
+        osc.stop(ctx.currentTime + 0.18);
+      } else {
+        osc.frequency.setValueAtTime(220, ctx.currentTime);
+        gain.gain.setValueAtTime(0.25, ctx.currentTime);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.4);
       }
     } catch (e) {
       // AudioContext fallback
@@ -66,15 +63,13 @@ export const ScannerPage = () => {
       const html5QrCode = new Html5Qrcode('qr-reader-canvas');
       html5QrcodeRef.current = html5QrCode;
 
-      const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+      const config = { fps: 12, qrbox: { width: 260, height: 260 } };
 
       await html5QrCode.start(
         { facingMode: 'environment' },
         config,
         onQrCodeScanned,
-        (errorMessage) => {
-          // Ignore frame decode errors
-        }
+        () => {}
       );
 
       setScanning(true);
@@ -114,14 +109,15 @@ export const ScannerPage = () => {
         playBeep('success');
         setScanResult({
           status: 'APPROVED',
-          title: '✓ ENTRY APPROVED',
+          title: '✓ ENTRY APPROVED — QR NOW EXPIRED',
           guestName: res.guestName,
-          ticketNumber: res.ticketNumber,
-          eventTitle: res.eventTitle,
+          ticketNumber: res.uniqueId || res.ticketNumber,
+          uniqueId: res.uniqueId || res.ticketNumber,
+          eventTitle: res.eventTitle || res.passType || 'Event Admission',
           checkinTime: res.checkinTime,
-          message: res.message
+          message: res.message || 'Pass verified successfully. QR is now EXPIRED.'
         });
-        toast.success(`Entry Approved for ${res.guestName}`);
+        toast.success(`Entry Approved for ${res.guestName} — QR expired!`);
       }
     } catch (err) {
       playBeep('error');
@@ -130,13 +126,14 @@ export const ScannerPage = () => {
       if (data.code === 'ALREADY_USED') {
         setScanResult({
           status: 'ALREADY_USED',
-          title: '⚠ TICKET ALREADY USED',
-          guestName: data.guestName || 'Guest',
-          ticketNumber: data.ticketNumber || '',
-          originalCheckinTime: data.originalCheckinTime ? new Date(data.originalCheckinTime).toLocaleTimeString() : 'Earlier',
-          message: data.message || 'This ticket was already scanned.'
+          title: '⚠ QR EXPIRED — ALREADY SCANNED',
+          guestName: data.guestName || 'Guest / Member',
+          ticketNumber: data.uniqueId || data.ticketNumber || '',
+          uniqueId: data.uniqueId || data.ticketNumber || '',
+          originalCheckinTime: data.originalCheckinTime ? new Date(data.originalCheckinTime).toLocaleString() : 'Earlier Today',
+          message: data.message || 'This QR pass was already scanned by Admin and is expired.'
         });
-        toast.warning(data.message || 'Ticket already used!');
+        toast.error('QR code is EXPIRED! Duplicate entry denied.');
       } else if (data.code === 'WRONG_EVENT') {
         setScanResult({
           status: 'WRONG_EVENT',
@@ -147,18 +144,13 @@ export const ScannerPage = () => {
       } else {
         setScanResult({
           status: 'INVALID',
-          title: '✕ INVALID TICKET',
+          title: '✕ INVALID QR PASS',
           message: data.message || err.message || 'Invalid or unverified ticket token.'
         });
-        toast.error(data.message || 'Invalid QR Ticket');
+        toast.error(data.message || 'Invalid QR Pass');
       }
     } finally {
       setLoadingCheckin(false);
-
-      // Auto reset after 4.5 seconds to prepare scanner for next guest
-      setTimeout(() => {
-        setScanResult(null);
-      }, 4500);
     }
   };
 
@@ -174,21 +166,26 @@ export const ScannerPage = () => {
       
       {/* Header Banner */}
       <div className="text-center space-y-2">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white text-black font-bold text-xs uppercase tracking-wider border border-white">
-          <ShieldCheck className="w-4 h-4 text-black" /> AUTHORIZED GATE STAFF SCANNER
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold text-xs uppercase tracking-wider border border-emerald-500/40">
+          <ShieldCheck className="w-4 h-4 text-emerald-400" /> AUTHORIZED ADMIN & STAFF GATE SCANNER
         </div>
-        <h1 className="text-3xl font-black text-white">Event Ticket Check-In</h1>
-        <p className="text-xs text-zinc-400">Scan guest QR code pass for instant gate entry validation</p>
+        <h1 className="text-3xl font-black text-white">QR Admission & Expiration Gate</h1>
+        <p className="text-xs text-zinc-400">
+          Scan guest or member QR codes. <strong className="text-amber-300">Each QR code automatically expires upon first scan.</strong>
+        </p>
       </div>
 
       {/* Event Selection */}
-      <div className="bg-zinc-950 border border-zinc-800 p-4 rounded-2xl space-y-2">
-        <label className="block text-xs font-semibold text-zinc-300">Select Active Gate Event</label>
+      <div className="bg-zinc-950 border border-zinc-800 p-4 rounded-2xl space-y-2 shadow-lg">
+        <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider">
+          Gate Scanning Mode / Target Event
+        </label>
         <select
           value={selectedEventId}
           onChange={(e) => setSelectedEventId(e.target.value)}
-          className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-white"
+          className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#38bdf8]"
         >
+          <option value="all">⚡ Universal Admission (Scan ANY Member Pass or Event Ticket)</option>
           {events.map((evt) => (
             <option key={evt.id} value={evt.id}>
               {evt.title} ({new Date(evt.event_date).toLocaleDateString()})
@@ -198,21 +195,23 @@ export const ScannerPage = () => {
       </div>
 
       {/* CAMERA SCANNER BOX */}
-      <div className="glass-panel p-6 rounded-3xl border border-zinc-800 space-y-6 text-center relative">
+      <div className="glass-panel p-6 rounded-3xl border border-zinc-800 space-y-6 text-center relative shadow-2xl">
         
         <div className="relative mx-auto w-full max-w-sm h-72 bg-black border-2 border-dashed border-zinc-700 rounded-2xl overflow-hidden flex items-center justify-center">
           
           <div id="qr-reader-canvas" className="w-full h-full"></div>
 
           {!scanning && (
-            <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-6 space-y-4">
-              <Camera className="w-12 h-12 text-white animate-pulse" />
-              <span className="text-xs text-zinc-400 max-w-xs">
-                Click below to turn on the camera stream and scan guest tickets.
+            <div className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center p-6 space-y-4">
+              <div className="w-16 h-16 rounded-2xl bg-[#38bdf8]/10 text-[#38bdf8] border border-[#38bdf8]/30 flex items-center justify-center shadow-lg animate-pulse">
+                <Camera className="w-8 h-8" />
+              </div>
+              <span className="text-xs text-zinc-400 max-w-xs leading-relaxed">
+                Aim the device camera at the attendee's QR code (on mobile screen or printed pass).
               </span>
               <button
                 onClick={startCamera}
-                className="px-6 py-3 rounded-xl bg-white text-black font-extrabold text-xs border border-white hover:bg-zinc-200 transition-all duration-200"
+                className="px-6 py-3 rounded-xl bg-[#38bdf8] hover:bg-[#7dd3fc] text-[#0B1928] font-black text-xs transition-all cursor-pointer shadow-lg"
               >
                 Start Camera Scanner
               </button>
@@ -222,7 +221,7 @@ export const ScannerPage = () => {
           {scanning && (
             <button
               onClick={stopCamera}
-              className="absolute bottom-3 right-3 px-3 py-1.5 rounded-lg bg-black/90 border border-zinc-700 text-white font-bold text-[11px] z-10"
+              className="absolute bottom-3 right-3 px-3 py-1.5 rounded-lg bg-black/90 border border-zinc-700 text-white font-bold text-[11px] z-10 cursor-pointer"
             >
               Stop Camera
             </button>
@@ -231,59 +230,94 @@ export const ScannerPage = () => {
         </div>
 
         {cameraError && (
-          <p className="text-xs text-white font-semibold">{cameraError}</p>
+          <p className="text-xs text-amber-300 font-semibold">{cameraError}</p>
         )}
 
       </div>
 
-      {/* ENTRY RESULT DISPLAY MODAL CARD */}
+      {/* ENTRY RESULT DISPLAY CARD */}
       {scanResult && (
-        <div className={`p-6 rounded-3xl border transition-all animate-in fade-in zoom-in duration-300 space-y-4 bg-black ${
+        <div className={`p-6 rounded-3xl border-2 transition-all animate-in fade-in zoom-in-95 duration-300 space-y-4 shadow-2xl ${
           scanResult.status === 'APPROVED'
-            ? 'border-white text-white'
+            ? 'bg-emerald-950/40 border-emerald-500 text-emerald-200'
             : scanResult.status === 'ALREADY_USED'
-            ? 'border-zinc-500 text-zinc-200'
-            : 'border-zinc-700 text-white'
+            ? 'bg-rose-950/40 border-rose-500 text-rose-200'
+            : 'bg-zinc-950 border-zinc-700 text-white'
         }`}>
-          <div className="flex items-center gap-3 border-b border-zinc-800 pb-3">
-            {scanResult.status === 'APPROVED' && <CheckCircle2 className="w-8 h-8 text-white shrink-0" />}
-            {scanResult.status === 'ALREADY_USED' && <AlertTriangle className="w-8 h-8 text-zinc-400 shrink-0" />}
-            {scanResult.status !== 'APPROVED' && scanResult.status !== 'ALREADY_USED' && <XCircle className="w-8 h-8 text-white shrink-0" />}
+          <div className="flex items-center gap-3 border-b border-zinc-800/80 pb-3">
+            {scanResult.status === 'APPROVED' && (
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+              </div>
+            )}
+            {scanResult.status === 'ALREADY_USED' && (
+              <div className="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-500 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-6 h-6 text-rose-400" />
+              </div>
+            )}
+            {scanResult.status !== 'APPROVED' && scanResult.status !== 'ALREADY_USED' && (
+              <div className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center shrink-0">
+                <XCircle className="w-6 h-6 text-rose-400" />
+              </div>
+            )}
             
             <div>
-              <h3 className="text-xl font-extrabold tracking-wide">{scanResult.title}</h3>
+              <h3 className="text-lg font-black tracking-wide">{scanResult.title}</h3>
               <p className="text-xs opacity-90">{scanResult.message}</p>
             </div>
           </div>
 
+          {/* APPROVED RESULT */}
           {scanResult.status === 'APPROVED' && (
-            <div className="grid grid-cols-2 gap-4 text-xs bg-zinc-950 p-4 rounded-2xl border border-zinc-800">
-              <div>
-                <span className="block text-[10px] opacity-70 uppercase font-semibold">Guest Name</span>
-                <span className="font-extrabold text-base text-white">{scanResult.guestName}</span>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3 text-xs bg-black/60 p-4 rounded-2xl border border-emerald-500/30">
+                <div>
+                  <span className="block text-[10px] opacity-70 uppercase font-semibold">Attendee / Member</span>
+                  <span className="font-extrabold text-base text-white">{scanResult.guestName}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] opacity-70 uppercase font-semibold">Unique ID (On QR)</span>
+                  <span className="font-mono font-black text-sm text-[#38bdf8]">{scanResult.uniqueId}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] opacity-70 uppercase font-semibold">Admission Pass / Event</span>
+                  <span className="font-semibold text-zinc-200">{scanResult.eventTitle}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] opacity-70 uppercase font-semibold">Scanned & Expired At</span>
+                  <span className="font-mono font-bold text-white">{scanResult.checkinTime}</span>
+                </div>
               </div>
-              <div>
-                <span className="block text-[10px] opacity-70 uppercase font-semibold">Ticket #</span>
-                <span className="font-mono font-bold text-white">{scanResult.ticketNumber}</span>
-              </div>
-              <div>
-                <span className="block text-[10px] opacity-70 uppercase font-semibold">Event</span>
-                <span className="font-semibold text-zinc-200">{scanResult.eventTitle}</span>
-              </div>
-              <div>
-                <span className="block text-[10px] opacity-70 uppercase font-semibold">Check-In Time</span>
-                <span className="font-semibold text-white">{scanResult.checkinTime}</span>
+
+              <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs font-bold text-center">
+                ✓ PASS NOW CONSUMED & EXPIRED: Any re-scan will be denied entry.
               </div>
             </div>
           )}
 
+          {/* ALREADY USED / EXPIRED RESULT */}
           {scanResult.status === 'ALREADY_USED' && (
-            <div className="text-xs bg-zinc-950 p-4 rounded-2xl border border-zinc-800 space-y-2">
-              <div>
-                <span className="block text-[10px] opacity-70 uppercase font-semibold">Original Check-in Timestamp</span>
-                <span className="font-mono font-bold text-white">{scanResult.originalCheckinTime}</span>
+            <div className="space-y-3">
+              <div className="text-xs bg-black/60 p-4 rounded-2xl border border-rose-500/30 space-y-2">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <span className="block text-[10px] opacity-70 uppercase font-semibold">Pass Holder</span>
+                    <span className="font-bold text-white">{scanResult.guestName}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] opacity-70 uppercase font-semibold">Unique ID</span>
+                    <span className="font-mono font-bold text-rose-400">{scanResult.uniqueId}</span>
+                  </div>
+                </div>
+                <div>
+                  <span className="block text-[10px] opacity-70 uppercase font-semibold">First Scanned & Expired Timestamp</span>
+                  <span className="font-mono font-bold text-white text-xs">{scanResult.originalCheckinTime}</span>
+                </div>
               </div>
-              <p className="text-[11px] opacity-80">Do NOT allow duplicate entry. This pass was already validated.</p>
+
+              <div className="p-3 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-200 text-xs font-bold text-center">
+                ⚠ ENTRY DENIED: This QR code has already expired and cannot be used again.
+              </div>
             </div>
           )}
 
@@ -293,31 +327,36 @@ export const ScannerPage = () => {
                 setScanResult(null);
                 startCamera();
               }}
-              className="px-6 py-2.5 rounded-xl bg-white text-black font-bold text-xs border border-white hover:bg-zinc-200"
+              className="px-6 py-2.5 rounded-xl bg-white text-black font-black text-xs hover:bg-zinc-200 shadow-md cursor-pointer"
             >
-              Ready for Next Guest Scan
+              Ready for Next Person Scan
             </button>
           </div>
         </div>
       )}
 
       {/* Manual Input Fallback */}
-      <div className="bg-zinc-950 border border-zinc-800 p-5 rounded-2xl space-y-3">
-        <span className="block text-xs font-semibold text-zinc-300">Manual Ticket Token Override</span>
+      <div className="bg-zinc-950 border border-zinc-800 p-5 rounded-2xl space-y-3 shadow-lg">
+        <span className="block text-xs font-bold text-zinc-300 uppercase tracking-wider">
+          Manual Pass / Unique ID Entry Override
+        </span>
+        <p className="text-[11px] text-zinc-500">
+          Enter attendee unique ID (e.g. <span className="font-mono text-[#38bdf8]">MEM-2026-849102</span> or <span className="font-mono text-[#38bdf8]">EVT-2026-102938</span>) or secure token:
+        </p>
         <form onSubmit={handleManualSubmit} className="flex gap-2">
           <input
             type="text"
-            placeholder="e.g. EVT-TK-9a8b7c6d5e4f3a2b1c0d"
+            placeholder="e.g. MEM-2026-849102 or EVT-2026-123456"
             value={manualToken}
             onChange={(e) => setManualToken(e.target.value)}
-            className="flex-1 bg-black border border-zinc-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-zinc-500 font-mono focus:outline-none focus:border-white"
+            className="flex-1 bg-black border border-zinc-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-zinc-500 font-mono focus:outline-none focus:border-[#38bdf8]"
           />
           <button
             type="submit"
             disabled={loadingCheckin}
-            className="px-5 py-2.5 rounded-xl bg-white text-black hover:bg-zinc-200 font-bold text-xs border border-white"
+            className="px-6 py-2.5 rounded-xl bg-[#38bdf8] text-[#0B1928] hover:bg-[#7dd3fc] font-black text-xs cursor-pointer shadow-md disabled:opacity-50"
           >
-            {loadingCheckin ? 'Validating...' : 'Verify'}
+            {loadingCheckin ? 'Validating...' : 'Scan & Expire'}
           </button>
         </form>
       </div>

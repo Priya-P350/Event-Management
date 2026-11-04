@@ -63,60 +63,60 @@ export const AdminEvents = () => {
             const regPercent = Math.min(100, Math.round((confirmedCount / cap) * 100));
 
             return (
-              <div key={evt.id} className="glass-panel p-6 rounded-3xl border border-zinc-800 space-y-4 flex flex-col justify-between">
+              <div key={evt.id} className="glass-panel p-6 rounded-3xl border border-white/20 space-y-4 flex flex-col justify-between shadow-xl">
                 
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="px-3 py-1 rounded-full bg-black border border-zinc-700 text-white font-bold text-[11px] flex items-center gap-1">
+                    <span className="px-3 py-1 rounded-full bg-black/80 text-white border border-white/20 font-extrabold text-[11px] flex items-center gap-1">
                       {evt.category === 'ITI & Vocational' && <Award className="w-3.5 h-3.5 text-amber-400" />}
                       {evt.category}
                     </span>
-                    <span className="px-3 py-1 rounded-full bg-black border border-zinc-700 text-zinc-300 font-mono text-[11px] font-bold capitalize">
+                    <span className="px-3 py-1 rounded-full bg-black/80 text-white border border-white/20 font-mono text-[11px] font-extrabold capitalize">
                       {evt.status.replace('_', ' ')}
                     </span>
                   </div>
 
                   <div className="flex items-start gap-4">
-                    <img src={evt.cover_image_url} alt={evt.title} className="w-20 h-20 rounded-2xl object-cover shrink-0 grayscale" />
+                    <img src={evt.cover_image_url} alt={evt.title} className="w-20 h-20 rounded-2xl object-cover shrink-0 border border-white/30 shadow-md" />
                     <div className="space-y-1">
-                      <h3 className="text-base font-bold text-white line-clamp-1">{evt.title}</h3>
+                      <h3 className="text-base font-black text-white line-clamp-1">{evt.title}</h3>
                       
-                      <div className="text-xs text-zinc-400 space-y-1">
+                      <div className="text-xs text-stone-200 space-y-1">
                         <div className="flex items-center gap-1.5">
                           <Calendar className="w-3.5 h-3.5 text-white shrink-0" />
                           <span>Main Date: {evt.event_date} ({evt.start_time})</span>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <MapPin className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                          <MapPin className="w-3.5 h-3.5 text-stone-300 shrink-0" />
                           <span className="line-clamp-1">{evt.venue}</span>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* ITI Specific Details Banner if available */}
+                  {/* ITI Specific Details Banner in Black Box */}
                   {(evt.iti_institute || evt.iti_trade) && (
-                    <div className="p-2.5 rounded-xl bg-black/60 border border-zinc-800 text-[11px] space-y-1">
+                    <div className="p-3 rounded-2xl bg-black/80 text-white border border-white/20 text-[11px] space-y-1 shadow-sm">
                       {evt.iti_institute && (
-                        <div className="text-zinc-300 font-medium flex items-center gap-1.5">
+                        <div className="text-white font-bold flex items-center gap-1.5">
                           <Building className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                           <span className="line-clamp-1">{evt.iti_institute}</span>
                         </div>
                       )}
                       {evt.iti_trade && (
-                        <div className="text-zinc-400 line-clamp-1">
-                          Trades: <strong className="text-white font-normal">{evt.iti_trade}</strong>
+                        <div className="text-stone-300 line-clamp-1">
+                          Trades: <strong className="text-white font-semibold">{evt.iti_trade}</strong>
                         </div>
                       )}
                     </div>
                   )}
 
-                  {/* Registration Window Dates */}
-                  <div className="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-between text-[11px] text-zinc-400">
-                    <span className="flex items-center gap-1 font-mono">
+                  {/* Registration Window Dates in Black Box */}
+                  <div className="p-3 rounded-2xl bg-black/80 text-white border border-white/20 flex items-center justify-between text-[11px] font-bold shadow-sm">
+                    <span className="flex items-center gap-1 font-mono text-white">
                       <Clock className="w-3.5 h-3.5 text-white" /> Reg Period:
                     </span>
-                    <span className="font-semibold text-white">
+                    <span className="font-extrabold text-white">
                       {evt.registration_open_at ? new Date(evt.registration_open_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Open'}
                       {' - '}
                       {evt.registration_close_at ? new Date(evt.registration_close_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Open'}
@@ -125,15 +125,15 @@ export const AdminEvents = () => {
 
                   {/* Registration Count Bar */}
                   <div className="space-y-1 text-xs">
-                    <div className="flex items-center justify-between text-zinc-400 text-[11px]">
+                    <div className="flex items-center justify-between text-stone-100 text-[11px] font-semibold">
                       <span className="flex items-center gap-1">
                         <Users className="w-3.5 h-3.5 text-white" /> Registration Count:
                       </span>
-                      <span className="font-bold text-white font-mono">
+                      <span className="font-extrabold text-white font-mono">
                         {confirmedCount} / {cap} ({regPercent}%)
                       </span>
                     </div>
-                    <div className="w-full bg-black h-2 rounded-full overflow-hidden p-0.5 border border-zinc-800">
+                    <div className="w-full bg-black/80 h-2.5 rounded-full overflow-hidden p-0.5 border border-white/20">
                       <div
                         className="bg-white h-full rounded-full transition-all duration-300"
                         style={{ width: `${regPercent}%` }}
@@ -143,21 +143,21 @@ export const AdminEvents = () => {
 
                 </div>
 
-                <div className="pt-3 border-t border-zinc-800 flex items-center justify-between text-xs">
-                  <span className="text-zinc-400">Price: <strong className="text-white">{Number(evt.ticket_price) === 0 ? 'FREE' : `₹${evt.ticket_price}`}</strong></span>
-                  <span className="text-zinc-400">Seats Left: <strong className="text-white">{evt.seats_remaining}</strong></span>
+                <div className="pt-3 border-t border-white/20 flex items-center justify-between text-xs">
+                  <span className="text-stone-200">Price: <strong className="text-white font-bold">{Number(evt.ticket_price) === 0 ? 'FREE' : `₹${evt.ticket_price}`}</strong></span>
+                  <span className="text-stone-200">Seats Left: <strong className="text-white font-bold">{evt.seats_remaining}</strong></span>
                   
                   <div className="flex items-center gap-2">
                     <Link
                       to={`/admin/events/${evt.id}`}
-                      className="p-2 rounded-lg bg-black hover:bg-zinc-800 text-white border border-zinc-800"
+                      className="p-2 rounded-xl bg-black/80 hover:bg-white text-white hover:text-black border border-white/20 font-bold transition-all"
                       title="Edit Event"
                     >
                       <Edit3 className="w-4 h-4" />
                     </Link>
                     <button
                       onClick={() => handleCancelEvent(evt.id)}
-                      className="p-2 rounded-lg bg-black hover:bg-zinc-800 text-white border border-zinc-800"
+                      className="p-2 rounded-xl bg-black/80 hover:bg-white text-white hover:text-black border border-white/20 font-bold transition-all"
                       title="Cancel Event"
                     >
                       <Trash2 className="w-4 h-4" />

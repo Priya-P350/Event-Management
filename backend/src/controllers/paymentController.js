@@ -49,8 +49,13 @@ async function verifyPayment(req, res, next) {
         // Update registration status to confirmed via Drizzle ORM
         await dbQuery.updateRegistrationStatus(registrationId, 'confirmed');
 
-        // Generate Ticket & QR Code
-        const { secureToken, ticketNumber, qrPayload } = generateTicketToken();
+        // Generate Ticket & QR Code with Details and Unique ID
+        const { secureToken, ticketNumber, qrPayload } = generateTicketToken({
+            guestName: registration.guest_name,
+            guestEmail: registration.guest_email,
+            guestPhone: registration.guest_phone,
+            eventId: registration.event_id
+        });
         const qrCodeDataUrl = await generateQRCodeDataUrl(qrPayload);
 
         const ticketData = {

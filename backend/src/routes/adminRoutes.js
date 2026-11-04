@@ -8,6 +8,7 @@ router.get('/dashboard', authenticateToken, requireAdmin, adminController.getDas
 router.get('/users', authenticateToken, requireAdmin, adminController.getAllUsers);
 router.post('/users', authenticateToken, requireAdmin, adminController.createUser);
 router.put('/users/:id/role', authenticateToken, requireAdmin, adminController.updateUserRole);
+router.post('/users/:id/reset-qr', authenticateToken, requireAdmin, adminController.resetMemberQr);
 router.delete('/users/:id', authenticateToken, requireAdmin, adminController.deleteUser);
 
 router.get('/registrations', authenticateToken, requireAdmin, adminController.getAllRegistrations);

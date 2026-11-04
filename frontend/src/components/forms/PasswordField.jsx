@@ -25,19 +25,19 @@ export const PasswordField = ({
           placeholder={placeholder}
           {...registerProps}
           {...rest}
-          className={`w-full bg-black border rounded-xl pl-10 pr-10 py-3 text-xs text-white placeholder-zinc-500 focus:outline-none transition-all duration-200 ${
+          className={`w-full bg-[#0B1928] border rounded-xl pl-10 pr-10 py-3 text-xs text-[#E5F4F9] placeholder-[#95B8C9]/60 focus:outline-none transition-all duration-200 ${
             error
               ? 'border-red-500 focus:border-red-400 focus:ring-1 focus:ring-red-400'
-              : 'border-zinc-800 focus:border-white focus:ring-1 focus:ring-white'
+              : 'border-[#1E394E] focus:border-[#4A96BA] focus:ring-1 focus:ring-[#4A96BA]'
           }`}
         />
-        <Lock className={`w-4 h-4 absolute left-3 top-3.5 ${error ? 'text-red-400' : 'text-zinc-500'}`} />
+        <Lock className={`w-4 h-4 absolute left-3 top-3.5 ${error ? 'text-red-400' : 'text-[#95B8C9]'}`} />
         
         <button
           type="button"
           onClick={() => setShowPassword(!showPassword)}
-          className="absolute right-3 top-3.5 text-zinc-500 hover:text-white transition-colors focus:outline-none"
-          tabIndex={-1}
+          aria-label={showPassword ? 'Hide password' : 'Show password'}
+          className="absolute right-3 top-3.5 text-[#95B8C9] hover:text-[#E5F4F9] transition-colors focus:outline-none"
         >
           {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
         </button>

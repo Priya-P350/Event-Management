@@ -100,7 +100,13 @@ async function createRegistration(req, res, next) {
             const { generateQRCodeDataUrl } = require('../services/qrService');
             const { sendQRTicketEmail } = require('../services/emailService');
 
-            const { secureToken, ticketNumber, qrPayload } = generateTicketToken();
+            const { secureToken, ticketNumber, qrPayload } = generateTicketToken({
+                guestName: name,
+                guestEmail: email,
+                guestPhone: phone,
+                eventTitle: event.title,
+                eventId: eventId
+            });
             const qrCodeDataUrl = await generateQRCodeDataUrl(qrPayload);
 
             const ticketData = {

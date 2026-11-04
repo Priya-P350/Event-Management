@@ -8,41 +8,123 @@
   -webkit-box-shadow: none !important;
 }
 
+:root {
+  /* Exact image color palette tokens */
+  --oceanic-950: #0B1928;
+  --oceanic-900: #122538;
+  --oceanic-800: #1E394E;
+  --oceanic-700: #2B4E66;
+  --oceanic-600: #304E61;
+  --oceanic-500: #38708C;
+  --oceanic-400: #4A96BA;
+  --oceanic-300: #95B8C9;
+  --oceanic-100: #E5F4F9;
+
+  /* Backward compatible tokens */
+  --forest-950: #0B1928;
+  --forest-900: #122538;
+  --forest-800: #1E394E;
+  --forest-700: #2B4E66;
+  --forest-300: #95B8C9;
+  --forest-100: #E5F4F9;
+}
+
 @layer base {
   body {
-    @apply bg-slate-950 text-slate-100 antialiased font-sans selection:bg-slate-200 selection:text-slate-950 min-h-screen overflow-x-hidden;
-    background-color: #030712;
+    @apply text-[#E5F4F9] antialiased font-sans min-h-screen overflow-x-hidden selection:bg-[#4A96BA] selection:text-[#0B1928];
+    background-color: #0B1928;
     background-image: 
-      radial-gradient(at 0% 0%, rgba(148, 163, 184, 0.06) 0px, transparent 50%),
-      radial-gradient(at 100% 100%, rgba(100, 116, 139, 0.05) 0px, transparent 50%),
-      linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-    background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+      radial-gradient(at 0% 0%, rgba(74, 150, 186, 0.18) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(31, 46, 74, 0.35) 0px, transparent 55%),
+      radial-gradient(at 50% 100%, rgba(18, 37, 56, 0.9) 0px, transparent 65%),
+      linear-gradient(to right, rgba(149, 184, 201, 0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(149, 184, 201, 0.03) 1px, transparent 1px),
+      url('/assets/texture-oceanic.png');
+    background-size: 100% 100%, 100% 100%, 100% 100%, 40px 40px, 40px 40px, 480px auto;
+    background-blend-mode: normal, normal, normal, normal, normal, overlay;
+    background-repeat: no-repeat, no-repeat, no-repeat, repeat, repeat, repeat;
+    background-attachment: fixed;
   }
 }
 
-/* Slate Utility Panels (No Shadows, Sharp Crisp Slate Borders) */
+/* Oceanic Textured Glass Panels */
 .glass-panel {
-  background: rgba(15, 23, 42, 0.85);
+  background: rgba(18, 37, 56, 0.88);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid rgba(149, 184, 201, 0.22);
 }
 
 .glass-card {
-  background: rgba(30, 41, 59, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(148, 163, 184, 0.15);
+  background: rgba(30, 57, 78, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(149, 184, 201, 0.25);
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .glass-card:hover {
-  border-color: rgba(226, 232, 240, 0.5);
+  border-color: rgba(229, 244, 249, 0.6);
+  background: rgba(30, 57, 78, 0.9);
   transform: translateY(-2px);
 }
 
-/* Slate Animations */
+/* Texture Canvas Showcase & Banner Utilities */
+.texture-banner {
+  background-image: 
+    linear-gradient(135deg, rgba(11, 25, 40, 0.92) 0%, rgba(18, 37, 56, 0.78) 50%, rgba(48, 78, 97, 0.85) 100%),
+    url('/assets/texture-oceanic.png');
+  background-size: cover, 360px auto;
+  background-blend-mode: normal, overlay;
+  background-repeat: no-repeat, repeat;
+}
+
+.texture-card {
+  background-image: 
+    linear-gradient(180deg, rgba(18, 37, 56, 0.92) 0%, rgba(11, 25, 40, 0.96) 100%),
+    url('/assets/texture-oceanic.png');
+  background-size: cover, 320px auto;
+  background-blend-mode: normal, overlay;
+  background-repeat: no-repeat, repeat;
+  border: 1px solid rgba(149, 184, 201, 0.25);
+}
+
+.texture-pass {
+  background-image: 
+    radial-gradient(circle at top right, rgba(74, 150, 186, 0.25), transparent 70%),
+    linear-gradient(180deg, #122538 0%, #0B1928 100%),
+    url('/assets/texture-oceanic.png');
+  background-blend-mode: screen, normal, overlay;
+  background-size: 100% 100%, 100% 100%, 300px auto;
+  background-repeat: no-repeat, no-repeat, repeat;
+}
+
+/* Black / Deep Obsidian Box Utility with Crisp Contrast */
+.black-box {
+  background-color: rgba(11, 25, 40, 0.96);
+  color: #E5F4F9;
+  border: 1px solid rgba(149, 184, 201, 0.25);
+}
+
+/* High Contrast Oceanic UI Elements */
+.forest-badge, .ocean-badge {
+  background-color: rgba(43, 78, 102, 0.5);
+  color: #E5F4F9;
+  border: 1px solid rgba(149, 184, 201, 0.35);
+}
+
+.forest-input, .ocean-input {
+  background-color: #0B1928;
+  color: #E5F4F9;
+  border: 1px solid #1E394E;
+}
+
+.forest-input:focus, .ocean-input:focus {
+  border-color: #4A96BA;
+  outline: none;
+}
+
+/* Slate / Oceanic Animations */
 @keyframes float-subtle {
   0%, 100% {
     transform: translateY(0px);
@@ -52,7 +134,7 @@
   }
 }
 
-@keyframes shimmer-slate {
+@keyframes shimmer-ocean {
   0% {
     background-position: -200% 0;
   }
@@ -61,12 +143,12 @@
   }
 }
 
-@keyframes pulse-slate-border {
+@keyframes pulse-ocean-border {
   0%, 100% {
-    border-color: rgba(148, 163, 184, 0.2);
+    border-color: rgba(149, 184, 201, 0.25);
   }
   50% {
-    border-color: rgba(226, 232, 240, 0.8);
+    border-color: rgba(229, 244, 249, 0.85);
   }
 }
 
@@ -75,38 +157,31 @@
 }
 
 .animate-shimmer-slate {
-  background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0) 100%);
+  background: linear-gradient(90deg, rgba(229,244,249,0) 0%, rgba(229,244,249,0.15) 50%, rgba(229,244,249,0) 100%);
   background-size: 200% 100%;
-  animation: shimmer-slate 3s infinite;
+  animation: shimmer-ocean 3s infinite;
 }
 
 .animate-pulse-slate {
-  animation: pulse-slate-border 2.5s infinite ease-in-out;
+  animation: pulse-ocean-border 2.5s infinite ease-in-out;
 }
 
-/* Custom Slate Scrollbar */
+/* Custom Oceanic Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #020617;
+  background: #0B1928;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #334155;
-  border: 1px solid #475569;
+  background: #1E394E;
+  border: 1px solid #2B4E66;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #cbd5e1;
-}
-
-/* Custom Cursor Hide Standard Pointer on Desktop */
-@media (pointer: fine) {
-  body, button, a, input, select, textarea, [role="button"] {
-    cursor: none !important;
-  }
+  background: #4A96BA;
 }

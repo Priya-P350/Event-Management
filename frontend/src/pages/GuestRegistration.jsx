@@ -205,32 +205,32 @@ export const GuestRegistration = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         
-        {/* Left 1 Col: Event Summary Card */}
+        {/* Left 1 Col: Event Summary Card with Woven Texture */}
         <div className="space-y-4">
-          <div className="glass-panel p-5 rounded-2xl border border-zinc-800 space-y-4">
-            <div className="h-36 rounded-xl overflow-hidden border border-zinc-800">
-              <img src={event.cover_image_url} alt={event.title} className="w-full h-full object-cover grayscale" />
+          <div className="texture-card p-5 rounded-2xl border border-[#2B4E66] space-y-4 shadow-xl">
+            <div className="h-36 rounded-xl overflow-hidden border border-[#1E394E] shadow-md">
+              <img src={event.cover_image_url} alt={event.title} className="w-full h-full object-cover" />
             </div>
 
             <div>
-              <span className="text-[10px] font-bold text-white uppercase tracking-widest">{event.category}</span>
-              <h3 className="text-base font-bold text-white leading-snug">{event.title}</h3>
+              <span className="text-[10px] font-bold text-[#4A96BA] uppercase tracking-widest">{event.category}</span>
+              <h3 className="text-base font-bold text-[#E5F4F9] leading-snug">{event.title}</h3>
             </div>
 
-            <div className="space-y-2 text-xs text-zinc-400 border-t border-zinc-800 pt-3">
+            <div className="space-y-2 text-xs text-[#95B8C9] border-t border-[#1E394E] pt-3">
               <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-white shrink-0" />
+                <Calendar className="w-4 h-4 text-[#4A96BA] shrink-0" />
                 <span>{new Date(event.event_date).toLocaleDateString()}</span>
               </div>
               <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-zinc-400 shrink-0" />
+                <MapPin className="w-4 h-4 text-[#95B8C9] shrink-0" />
                 <span className="line-clamp-1">{event.venue}</span>
               </div>
             </div>
 
-            <div className="p-3 bg-black border border-zinc-800 rounded-xl flex items-center justify-between">
-              <span className="text-xs text-zinc-400 font-medium">Total Amount Due</span>
-              <span className="text-lg font-extrabold text-white">
+            <div className="p-3 bg-[#0B1928] border border-[#1E394E] rounded-xl flex items-center justify-between">
+              <span className="text-xs text-[#95B8C9] font-medium">Total Amount Due</span>
+              <span className="text-lg font-extrabold text-[#E5F4F9]">
                 {Number(event.ticket_price) === 0 ? (
                   <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs tracking-wider uppercase font-bold">FREE ENTRY</span>
                 ) : (
@@ -243,13 +243,13 @@ export const GuestRegistration = () => {
 
         {/* Right 2 Cols: Guest Registration Form */}
         <div className="md:col-span-2">
-          <div className="glass-panel p-8 rounded-3xl border border-zinc-800 space-y-6">
+          <div className="bg-[#122538]/90 backdrop-blur-xl p-8 rounded-3xl border border-[#1E394E] space-y-6 shadow-2xl">
             
             <div>
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                <Ticket className="w-5 h-5 text-white" /> Guest Registration Form
+              <h2 className="text-xl font-bold text-[#E5F4F9] flex items-center gap-2">
+                <Ticket className="w-5 h-5 text-[#4A96BA]" /> Guest Registration Form
               </h2>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-[#95B8C9]">
                 {Number(event.ticket_price) === 0 
                   ? 'Free event registration. An instant QR access pass will be emailed to you.' 
                   : 'Powered by React Hook Form & Razorpay Payment Gateway'}

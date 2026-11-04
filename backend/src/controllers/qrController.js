@@ -141,6 +141,94 @@ async function generateAndEmailQrCode(req, res, next) {
     }
 }
 
+/**
+ * Retrieves the current authenticated user's Member QR Pass.
+ */
+async function getMemberPass(req, res, next) {
+    try {
+        const userId = req.user?.id;
+        if (!userId) {
+            return res.status(401).json({ success: false, message: 'Authentication required.' });
+        }
+
+        const user = await dbQuery.findUserById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found.' });
+        }
+
+        res.json({
+            success: true,
+            memberPass: {
+                userId: user.id,
+                name: user.name,
+                email: user.email,
+                phone: user.phone,
+                role: user.role,
+                uniqueId: user.member_id || user.memberId || user.id,
+                memberId: user.member_id || user.memberId || user.id,
+                qrCodeData: user.qr_code_data,
+                qrToken: user.qr_token,
+                status: user.qr_status || 'active',
+                scannedAt: user.qr_scanned_at,
+                scannedBy: user.qr_scanned_by
+            }
+        });
+    } catch (err) {
+        next(err);
+    }
+}
+
+/**
+ * Regenerates a member's QR pass and reactivates it.
+ */
+async function regenerateMemberPass(req, res, next) {
+    try {
+        const userId = req.user?.id;
+        if (!userId) {
+            return res.status(401).json({ success: false, message: 'Authentication required.' });
+        }
+
+        const user = await dbQuery.findUserById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found.' });
+        }
+
+        const { generateMemberToken } = require('../utils/ticketToken');
+        const { generateQRCodeDataUrl } = require('../services/qrService');
+
+        const { memberId, secureToken, qrPayload } = generateMemberToken(user);
+        const qrCodeDataUrl = await generateQRCodeDataUrl(qrPayload);
+
+        await dbQuery.updateUserMemberPass(user.id, {
+            member_id: memberId,
+            qr_token: secureToken,
+            qr_code_data: qrCodeDataUrl,
+            qr_status: 'active'
+        });
+
+        res.json({
+            success: true,
+            message: 'Member QR pass refreshed successfully.',
+            memberPass: {
+                userId: user.id,
+                name: user.name,
+                email: user.email,
+                phone: user.phone,
+                role: user.role,
+                uniqueId: memberId,
+                memberId: memberId,
+                qrCodeData: qrCodeDataUrl,
+                qrToken: secureToken,
+                status: 'active'
+            }
+        });
+    } catch (err) {
+        next(err);
+    }
+}
+
 module.exports = {
-    generateAndEmailQrCode
+    generateAndEmailQrCode,
+    getMemberPass,
+    regenerateMemberPass
 };

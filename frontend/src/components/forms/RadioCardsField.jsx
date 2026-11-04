@@ -36,15 +36,15 @@ export const RadioCardsField = ({
               }}
               className={`p-3 rounded-xl border text-left flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 isSelected
-                  ? 'bg-white text-black border-white font-extrabold shadow-lg shadow-white/10 scale-[1.02]'
-                  : 'bg-black text-zinc-400 border-zinc-800 hover:border-zinc-700 hover:text-white'
+                  ? 'bg-[#E5F4F9] text-[#0B1928] border-[#E5F4F9] font-extrabold shadow-md scale-[1.02]'
+                  : 'bg-[#0B1928] text-[#95B8C9] border-[#1E394E] hover:border-[#4A96BA] hover:text-[#E5F4F9]'
               }`}
             >
               {Icon && <Icon className="w-5 h-5" />}
               <span className="text-xs font-semibold">{opt.label}</span>
               {opt.badge && (
                 <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
-                  isSelected ? 'bg-black/10 text-black' : 'bg-zinc-800 text-zinc-400'
+                  isSelected ? 'bg-[#0B1928]/15 text-[#0B1928]' : 'bg-[#1E394E] text-[#95B8C9]'
                 }`}>
                   {opt.badge}
                 </span>

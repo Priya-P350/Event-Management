@@ -27,16 +27,16 @@ export const TextInputField = ({
           placeholder={placeholder}
           {...registerProps}
           {...rest}
-          className={`w-full bg-black border rounded-xl py-3 text-xs text-white placeholder-zinc-500 focus:outline-none transition-all duration-200 ${
+          className={`w-full bg-[#0B1928] border rounded-xl py-3 text-xs text-[#E5F4F9] placeholder-[#95B8C9]/60 focus:outline-none transition-all duration-200 ${
             Icon ? 'pl-10 pr-4' : 'px-4'
           } ${
             error
               ? 'border-red-500 focus:border-red-400 focus:ring-1 focus:ring-red-400'
-              : 'border-zinc-800 focus:border-white focus:ring-1 focus:ring-white'
-          } ${disabled ? 'opacity-50 cursor-not-allowed bg-zinc-950' : ''}`}
+              : 'border-[#1E394E] focus:border-[#4A96BA] focus:ring-1 focus:ring-[#4A96BA]'
+          } ${disabled ? 'opacity-50 cursor-not-allowed bg-[#122538]' : ''}`}
         />
         {Icon && (
-          <Icon className={`w-4 h-4 absolute left-3 top-3.5 ${error ? 'text-red-400' : 'text-zinc-500'}`} />
+          <Icon className={`w-4 h-4 absolute left-3 top-3.5 ${error ? 'text-red-400' : 'text-[#95B8C9]'}`} />
         )}
       </div>
     </FormField>

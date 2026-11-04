@@ -7,12 +7,28 @@ describe('Event Management & QR Ticket REST APIs', () => {
 
     beforeAll(async () => {
         const dbQuery = require('../config/db');
-        const tk = await dbQuery.getTicketByToken('EVT-TK-9a8b7c6d5e4f3a2b1c0d');
-        if (tk && dbQuery.mode === 'sqlite') {
-            dbQuery.sqliteDb.prepare("DELETE FROM attendance WHERE ticket_id = ?").run(tk.id);
-            dbQuery.sqliteDb.prepare("UPDATE tickets SET status = 'active' WHERE id = ?").run(tk.id);
+        // Give connection a brief moment if asynchronous
+        if (dbQuery.mode === 'mongodb') {
+            await new Promise(r => setTimeout(r, 1200));
         }
-    });
+        const tk = await dbQuery.getTicketByToken('EVT-TK-9a8b7c6d5e4f3a2b1c0d');
+        if (tk) {
+            if (dbQuery.mode === 'mongodb') {
+                await dbQuery.mongoModels.Attendance.deleteOne({ ticket_id: tk.id });
+                await dbQuery.mongoModels.Ticket.updateOne({ _id: tk.id }, { status: 'active' });
+            } else if (dbQuery.mode === 'sqlite') {
+                dbQuery.sqliteDb.prepare("DELETE FROM attendance WHERE ticket_id = ?").run(tk.id);
+                dbQuery.sqliteDb.prepare("UPDATE tickets SET status = 'active' WHERE id = ?").run(tk.id);
+            }
+        }
+    }, 25000);
+
+    afterAll(async () => {
+        const mongoose = require('mongoose');
+        if (mongoose.connection && mongoose.connection.readyState !== 0) {
+            await mongoose.connection.close();
+        }
+    }, 10000);
 
     it('GET /api/health - should return OK status', async () => {
         const res = await request(app).get('/api/health');

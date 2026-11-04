@@ -5,27 +5,179 @@ async function scanTicket(req, res, next) {
         let { ticketToken, eventId, deviceInfo } = req.body;
 
         if (!ticketToken) {
-            return res.status(400).json({ success: false, message: 'Ticket token is required.' });
+            return res.status(400).json({ success: false, message: 'Ticket token or QR payload is required.' });
         }
 
-        // Clean raw scanned text if prefix "EVENT-TICKET:" is included
-        if (ticketToken.includes('EVENT-TICKET:')) {
-            ticketToken = ticketToken.split('EVENT-TICKET:')[1].trim();
+        let cleanText = String(ticketToken).trim();
+        let parsedJson = null;
+
+        // 1. Try parsing JSON payload (if QR encodes JSON object)
+        if (cleanText.startsWith('{') && cleanText.endsWith('}')) {
+            try {
+                parsedJson = JSON.parse(cleanText);
+            } catch (e) {
+                // Not valid JSON, continue with raw text
+            }
         }
 
-        const ticket = await dbQuery.getTicketByToken(ticketToken);
+        // 2. Extract potential identifiers
+        let candidateIdOrToken = cleanText;
+        if (parsedJson) {
+            candidateIdOrToken = parsedJson.token || parsedJson.secureToken || parsedJson.uniqueId || parsedJson.memberId || parsedJson.ticketNumber || cleanText;
+        } else if (cleanText.includes('EVENTHUB-MEMBER:')) {
+            candidateIdOrToken = cleanText.split('EVENTHUB-MEMBER:')[1].trim();
+        } else if (cleanText.includes('EVENT-TICKET:')) {
+            candidateIdOrToken = cleanText.split('EVENT-TICKET:')[1].trim();
+        } else if (cleanText.includes('EVENTHUB-VERIFY:')) {
+            candidateIdOrToken = cleanText.split('EVENTHUB-VERIFY:')[1].split(':')[0].trim();
+        }
 
-        if (!ticket) {
-            return res.status(404).json({
-                success: false,
-                code: 'INVALID_TICKET',
-                title: 'INVALID TICKET',
-                message: 'No active ticket record found matching this QR code token.'
+        // Clean any sub-segments (e.g. if MEM-2026-XXXX:TOKEN:Name)
+        if (candidateIdOrToken.includes(':')) {
+            candidateIdOrToken = candidateIdOrToken.split(':')[0].trim();
+        }
+
+        const isMemberHint = (parsedJson && parsedJson.type === 'member_pass') ||
+                             cleanText.includes('EVENTHUB-MEMBER:') ||
+                             candidateIdOrToken.startsWith('MEM-');
+
+        // Check for Member Pass
+        let member = null;
+        if (isMemberHint || candidateIdOrToken.startsWith('MEM-')) {
+            member = await dbQuery.findUserByMemberIdOrToken(candidateIdOrToken) ||
+                     (parsedJson?.uniqueId ? await dbQuery.findUserByMemberIdOrToken(parsedJson.uniqueId) : null) ||
+                     (parsedJson?.email ? await dbQuery.findUserByEmail(parsedJson.email) : null);
+        }
+
+        if (member) {
+            // Check if Member QR Pass is already expired
+            if (member.qr_status === 'expired') {
+                const expiredTime = member.qr_scanned_at ? new Date(member.qr_scanned_at).toLocaleString() : 'Earlier';
+                return res.status(409).json({
+                    success: false,
+                    code: 'ALREADY_USED',
+                    title: 'QR EXPIRED - ALREADY SCANNED',
+                    message: `This Member QR code was already scanned by Admin on ${expiredTime} and is now EXPIRED. Duplicate entry denied.`,
+                    originalCheckinTime: member.qr_scanned_at,
+                    guestName: member.name,
+                    guestEmail: member.email,
+                    uniqueId: member.member_id || member.id,
+                    ticketNumber: member.member_id || member.id,
+                    status: 'expired'
+                });
+            }
+
+            // Valid active member pass: mark as EXPIRED upon Admin scanning
+            const adminIdentifier = req.user ? (req.user.name || req.user.email) : 'Authorized Admin';
+            const checkinResult = await dbQuery.processMemberCheckinAtomic(
+                member.id,
+                adminIdentifier,
+                deviceInfo || 'Gate Camera Scanner'
+            );
+
+            if (!checkinResult.success) {
+                if (checkinResult.reason === 'ALREADY_USED') {
+                    return res.status(409).json({
+                        success: false,
+                        code: 'ALREADY_USED',
+                        title: 'QR EXPIRED - ALREADY SCANNED',
+                        message: 'This Member QR code was already scanned by Admin and is now EXPIRED.',
+                        guestName: member.name,
+                        uniqueId: member.member_id || member.id,
+                        status: 'expired'
+                    });
+                }
+                return res.status(400).json({
+                    success: false,
+                    code: 'CHECKIN_FAILED',
+                    title: 'ENTRY DENIED',
+                    message: checkinResult.reason || 'Check-in validation failed.'
+                });
+            }
+
+            const checkinTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            return res.json({
+                success: true,
+                code: 'ENTRY_APPROVED',
+                title: 'ENTRY APPROVED — QR NOW EXPIRED',
+                message: 'Member QR code verified and expired. Single admission granted.',
+                guestName: member.name,
+                guestEmail: member.email,
+                guestPhone: member.phone,
+                uniqueId: member.member_id || member.id,
+                ticketNumber: member.member_id || member.id,
+                eventTitle: 'Member Gate Admission',
+                passType: 'Member Pass',
+                role: member.role,
+                checkinTime,
+                status: 'expired'
             });
         }
 
-        // Event association check
-        if (eventId && ticket.event_id !== eventId) {
+        // Look for Event Ticket
+        let ticket = await dbQuery.getTicketByToken(candidateIdOrToken);
+        if (!ticket && parsedJson?.ticketNumber) {
+            ticket = await dbQuery.getTicketByToken(parsedJson.ticketNumber);
+        }
+        if (!ticket && parsedJson?.secureToken) {
+            ticket = await dbQuery.getTicketByToken(parsedJson.secureToken);
+        }
+        if (!ticket && cleanText !== candidateIdOrToken) {
+            ticket = await dbQuery.getTicketByToken(cleanText);
+        }
+
+        // If ticket not found, try member lookup as fallback in case it didn't have MEM prefix
+        if (!ticket) {
+            const fallbackMember = await dbQuery.findUserByMemberIdOrToken(candidateIdOrToken) ||
+                                   await dbQuery.findUserByEmailOrPhone(candidateIdOrToken);
+            if (fallbackMember) {
+                if (fallbackMember.qr_status === 'expired') {
+                    const expiredTime = fallbackMember.qr_scanned_at ? new Date(fallbackMember.qr_scanned_at).toLocaleString() : 'Earlier';
+                    return res.status(409).json({
+                        success: false,
+                        code: 'ALREADY_USED',
+                        title: 'QR EXPIRED - ALREADY SCANNED',
+                        message: `This Member QR code was already scanned by Admin on ${expiredTime} and is now EXPIRED. Duplicate entry denied.`,
+                        originalCheckinTime: fallbackMember.qr_scanned_at,
+                        guestName: fallbackMember.name,
+                        uniqueId: fallbackMember.member_id || fallbackMember.id,
+                        status: 'expired'
+                    });
+                }
+
+                const adminIdentifier = req.user ? (req.user.name || req.user.email) : 'Authorized Admin';
+                await dbQuery.processMemberCheckinAtomic(fallbackMember.id, adminIdentifier, deviceInfo || 'Gate Camera Scanner');
+                const checkinTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                return res.json({
+                    success: true,
+                    code: 'ENTRY_APPROVED',
+                    title: 'ENTRY APPROVED — QR NOW EXPIRED',
+                    message: 'Member QR code verified and expired. Single admission granted.',
+                    guestName: fallbackMember.name,
+                    guestEmail: fallbackMember.email,
+                    guestPhone: fallbackMember.phone,
+                    uniqueId: fallbackMember.member_id || fallbackMember.id,
+                    ticketNumber: fallbackMember.member_id || fallbackMember.id,
+                    eventTitle: 'Member Gate Admission',
+                    passType: 'Member Pass',
+                    role: fallbackMember.role,
+                    checkinTime,
+                    status: 'expired'
+                });
+            }
+
+            return res.status(404).json({
+                success: false,
+                code: 'INVALID_TICKET',
+                title: 'INVALID QR CODE',
+                message: 'No active member pass or event ticket record found matching this QR code.'
+            });
+        }
+
+        // Event association check (if a specific event filter is selected)
+        if (eventId && eventId !== 'all' && eventId !== 'ALL' && ticket.event_id !== eventId) {
             return res.status(400).json({
                 success: false,
                 code: 'WRONG_EVENT',
@@ -45,6 +197,22 @@ async function scanTicket(req, res, next) {
             });
         }
 
+        // Check if ticket status is already expired or has attendance record
+        if (ticket.status === 'expired' || ticket.attendance) {
+            const checkinTime = ticket.attendance ? new Date(ticket.attendance.checked_in_at || ticket.attendance.checkedInAt).toLocaleString() : 'Earlier';
+            return res.status(409).json({
+                success: false,
+                code: 'ALREADY_USED',
+                title: 'QR EXPIRED - ALREADY SCANNED',
+                message: `This QR ticket was already scanned by Admin on ${checkinTime} and is now EXPIRED. Duplicate entry denied.`,
+                originalCheckinTime: ticket.attendance ? (ticket.attendance.checked_in_at || ticket.attendance.checkedInAt) : null,
+                guestName: ticket.registration ? ticket.registration.guest_name : (ticket.user ? ticket.user.name : 'Guest'),
+                uniqueId: ticket.ticket_number,
+                ticketNumber: ticket.ticket_number,
+                status: 'expired'
+            });
+        }
+
         // Check payment status
         const registration = ticket.registration || await dbQuery.getRegistrationById(ticket.registration_id);
 
@@ -58,7 +226,7 @@ async function scanTicket(req, res, next) {
             });
         }
 
-        // Atomic Check-in Process
+        // Atomic Check-in Process (Sets ticket status to 'expired')
         const staffUserId = req.user ? req.user.id : null;
         const result = await dbQuery.processCheckinAtomic(
             ticket.id,
@@ -74,11 +242,13 @@ async function scanTicket(req, res, next) {
                 return res.status(409).json({
                     success: false,
                     code: 'ALREADY_USED',
-                    title: 'TICKET ALREADY USED',
-                    message: `This QR ticket was already scanned and checked in at ${checkinTime}. Duplicate entry denied.`,
+                    title: 'QR EXPIRED - ALREADY SCANNED',
+                    message: `This QR ticket was already scanned by Admin at ${checkinTime} and is now EXPIRED. Duplicate entry denied.`,
                     originalCheckinTime: result.existingCheckin ? (result.existingCheckin.checked_in_at || result.existingCheckin.checkedInAt) : null,
                     guestName: registration ? registration.guest_name : (ticket.user ? ticket.user.name : 'Guest'),
-                    ticketNumber: ticket.ticket_number
+                    uniqueId: ticket.ticket_number,
+                    ticketNumber: ticket.ticket_number,
+                    status: 'expired'
                 });
             }
 
@@ -90,21 +260,23 @@ async function scanTicket(req, res, next) {
             });
         }
 
-        // Success response
+        // Success response — QR is now expired!
         const guestName = registration ? registration.guest_name : (ticket.user ? ticket.user.name : 'Guest');
         const checkinTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         res.json({
             success: true,
             code: 'ENTRY_APPROVED',
-            title: 'ENTRY APPROVED',
-            message: 'Guest verified and checked in successfully.',
+            title: 'ENTRY APPROVED — QR NOW EXPIRED',
+            message: 'Guest verified and checked in successfully. QR ticket is now EXPIRED.',
             guestName,
             guestEmail: registration ? registration.guest_email : '',
             ticketNumber: ticket.ticket_number,
+            uniqueId: ticket.ticket_number,
             eventTitle: ticket.event ? ticket.event.title : 'Event',
             checkinTime,
-            attendanceId: result.checkin ? result.checkin.id : null
+            status: 'expired',
+            attendanceId: result.attendance ? result.attendance.id : null
         });
 
     } catch (err) {

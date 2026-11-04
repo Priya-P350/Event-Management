@@ -4,7 +4,7 @@ const jwtSecret = process.env.JWT_SECRET || 'super_secret_jwt_key_eventhub_2026_
 
 function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+    const token = (authHeader && authHeader.split(' ')[1]) || (req.query && req.query.token);
 
     if (!token) {
         return res.status(401).json({ success: false, message: 'Authentication required. No token provided.' });
@@ -21,7 +21,7 @@ function authenticateToken(req, res, next) {
 
 function optionalAuth(req, res, next) {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+    const token = (authHeader && authHeader.split(' ')[1]) || (req.query && req.query.token);
     if (!token) return next();
 
     jwt.verify(token, jwtSecret, (err, decoded) => {

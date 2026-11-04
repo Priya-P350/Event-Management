@@ -4,7 +4,7 @@ export const FormField = ({ label, required, error, helperText, children, classN
   return (
     <div className={`space-y-1.5 ${className}`}>
       {label && (
-        <label className="block text-xs font-semibold text-zinc-300">
+        <label className="block text-xs font-semibold text-[#E5F4F9]">
           {label}
           {required && <span className="text-red-400 ml-1">*</span>}
         </label>
@@ -16,7 +16,7 @@ export const FormField = ({ label, required, error, helperText, children, classN
         </p>
       )}
       {helperText && !error && (
-        <p className="text-[11px] text-zinc-500">{helperText}</p>
+        <p className="text-[11px] text-[#95B8C9]">{helperText}</p>
       )}
     </div>
   );

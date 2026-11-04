@@ -29,8 +29,13 @@ export const ticketService = {
   getTicketByToken: (token) => api.get(`/tickets/${token}`),
 };
 
+export const qrService = {
+  getMemberPass: () => api.get('/qr/member-pass'),
+  regenerateMemberPass: () => api.post('/qr/member-pass/regenerate'),
+};
+
 export const checkinService = {
-  scanTicket: (ticketToken, eventId) => api.post('/checkin/scan', { ticketToken, eventId }),
+  scanTicket: (ticketToken, eventId, deviceInfo) => api.post('/checkin/scan', { ticketToken, eventId, deviceInfo }),
   getEventAttendance: (eventId) => api.get(`/checkin/events/${eventId}/attendance`),
 };
 
@@ -52,4 +57,5 @@ export const adminService = {
   exportRegistrationsCSV: () => `${api.defaults.baseURL}/admin/export/registrations`,
   exportPaymentsCSV: () => `${api.defaults.baseURL}/admin/export/payments`,
   initiateRefund: (paymentId, reason) => api.post('/admin/refund', { paymentId, reason }),
+  resetMemberQr: (id) => api.post(`/admin/users/${id}/reset-qr`),
 };

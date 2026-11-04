@@ -4,38 +4,65 @@ const postgres = require('postgres');
 const Database = require('better-sqlite3');
 const path = require('path');
 const bcrypt = require('bcryptjs');
+const { v4: uuidv4 } = require('uuid');
 const { eq, and, or, ilike, sql, desc, count, sum } = require('drizzle-orm');
 
 const schema = require('../db/schema');
+const mongo = require('./mongo');
+const { models: mongoModels } = mongo;
 
 let mode = 'sqlite';
 let sqliteDb = null;
 let pgClient = null;
 let drizzleDb = null;
 
-// Initialize SQLite as local database file
+// Initialize SQLite as local database file fallback
 const dbPath = path.join(__dirname, '../../local_database.sqlite');
 sqliteDb = new Database(dbPath);
 sqliteDb.pragma('foreign_keys = ON');
 initSqliteTables(sqliteDb);
 
+// Determine database mode
+const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
 const databaseUrl = process.env.DATABASE_URL || process.env.SUPABASE_DB_URL;
 
-if (databaseUrl && (databaseUrl.startsWith('postgres://') || databaseUrl.startsWith('postgresql://'))) {
-    try {
-        pgClient = postgres(databaseUrl, { ssl: 'require' });
-        drizzleDb = drizzlePg(pgClient, { schema });
-        mode = 'postgres';
-        console.log('[Database] Connected to PostgreSQL (Supabase) via Drizzle ORM');
-    } catch (err) {
-        console.warn(`[Database] PostgreSQL connection error (${err.message}). Using local SQLite via Drizzle ORM...`);
+// Always initialize fallback SQLite or PostgreSQL immediately so drizzleDb is never null
+setupSqliteOrPg();
+
+if (mongoUri || process.env.DB_TYPE === 'mongodb') {
+    // Connect to MongoDB asynchronously; mode remains sqlite/postgres until mongo is ready
+    mongo.connectMongo().then(res => {
+        if (res.connected) {
+            mode = 'mongodb';
+            console.log('[Database] Active Database Engine: MongoDB (Mongoose)');
+        } else {
+            console.warn('[Database] MongoDB failed to connect. Falling back to local embedded SQLite...');
+            mode = 'sqlite';
+            setupSqliteOrPg();
+        }
+    }).catch(err => {
+        console.warn(`[Database] MongoDB error (${err.message}). Falling back to local embedded SQLite...`);
+        mode = 'sqlite';
+        setupSqliteOrPg();
+    });
+}
+
+function setupSqliteOrPg() {
+    if (databaseUrl && (databaseUrl.startsWith('postgres://') || databaseUrl.startsWith('postgresql://'))) {
+        try {
+            pgClient = postgres(databaseUrl, { ssl: 'require' });
+            drizzleDb = drizzlePg(pgClient, { schema });
+            mode = 'postgres';
+            console.log('[Database] Connected to PostgreSQL (Supabase) via Drizzle ORM');
+        } catch (err) {
+            console.warn(`[Database] PostgreSQL connection error (${err.message}). Using local SQLite via Drizzle ORM...`);
+            drizzleDb = drizzleSqlite(sqliteDb, { schema });
+            mode = 'sqlite';
+        }
+    } else {
         drizzleDb = drizzleSqlite(sqliteDb, { schema });
         mode = 'sqlite';
     }
-} else {
-    console.log('[Database] DATABASE_URL not found. Using local SQLite via Drizzle ORM...');
-    drizzleDb = drizzleSqlite(sqliteDb, { schema });
-    mode = 'sqlite';
 }
 
 function getTables() {
@@ -61,6 +88,13 @@ function initSqliteTables(db) {
             phone TEXT,
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'guest',
+            member_id TEXT,
+            qr_code_data TEXT,
+            qr_token TEXT,
+            qr_status TEXT DEFAULT 'active',
+            qr_scanned_at TEXT,
+            qr_scanned_by TEXT,
+            qr_device_info TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
@@ -167,6 +201,17 @@ function initSqliteTables(db) {
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS member_attendance (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            member_id TEXT,
+            checked_in_by TEXT,
+            checked_in_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            status TEXT NOT NULL DEFAULT 'expired',
+            device_info TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
         CREATE TABLE IF NOT EXISTS webhook_events (
             id TEXT PRIMARY KEY,
             event_id TEXT UNIQUE NOT NULL,
@@ -175,6 +220,22 @@ function initSqliteTables(db) {
             processed_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
     `);
+
+    // Ensure users and attendance have member QR columns in existing database
+    const userMigrations = [
+        "ALTER TABLE users ADD COLUMN member_id TEXT;",
+        "ALTER TABLE users ADD COLUMN qr_code_data TEXT;",
+        "ALTER TABLE users ADD COLUMN qr_token TEXT;",
+        "ALTER TABLE users ADD COLUMN qr_status TEXT DEFAULT 'active';",
+        "ALTER TABLE users ADD COLUMN qr_scanned_at TEXT;",
+        "ALTER TABLE users ADD COLUMN qr_scanned_by TEXT;",
+        "ALTER TABLE users ADD COLUMN qr_device_info TEXT;",
+        "ALTER TABLE attendance ADD COLUMN user_id TEXT;",
+        "ALTER TABLE attendance ADD COLUMN member_id TEXT;"
+    ];
+    for (const sqlStmt of userMigrations) {
+        try { db.exec(sqlStmt); } catch (e) { /* Column already exists */ }
+    }
 
     const userCount = db.prepare('SELECT count(*) as count FROM users').get();
     if (userCount.count === 0) {
@@ -221,110 +282,15 @@ function seedSqliteData(db) {
         'registration_open',
         '11111111-1111-1111-1111-111111111111'
     );
-
-    insertEvent.run(
-        'a2222222-2222-2222-2222-222222222222',
-        'Neon Pulsar Music Festival',
-        'An immersive electronic & synthwave music festival with high-octane stage lights, top international DJs, gourmet food trucks, and VIP lounge experiences.',
-        'Music',
-        'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=1200&q=80',
-        '2026-11-20',
-        '16:00',
-        '23:30',
-        'Skyline Open Air Arena',
-        'Sector 18, Riverside Boulevard, Downtown City',
-        'https://maps.google.com',
-        2999.00,
-        1200,
-        '2026-09-05 00:00:00',
-        '2026-11-19 23:59:59',
-        'registration_open',
-        '22222222-2222-2222-2222-222222222222'
-    );
-
-    insertEvent.run(
-        'a3333333-3333-3333-3333-333333333333',
-        'Startup Pitch & Venture Gala',
-        'Connect top venture capitalists, angel investors, and high-growth startup founders. Watch live pitch sessions with funding opportunities over $5M.',
-        'Business',
-        'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1200&q=80',
-        '2026-12-05',
-        '10:00',
-        '17:00',
-        'The Zenith Business Hub',
-        '8th Floor Executive Hall, Commercial Center, Metro City',
-        'https://maps.google.com',
-        999.00,
-        250,
-        '2026-09-10 00:00:00',
-        '2026-12-04 23:59:59',
-        'registration_open',
-        '11111111-1111-1111-1111-111111111111'
-    );
-
-    insertEvent.run(
-        'a4444444-4444-4444-4444-444444444444',
-        'Generative AI Masterclass Workshop',
-        'Hands-on masterclass building LLM agents, RAG systems, multimodal apps, and fine-tuning open source models with industry AI experts.',
-        'Education',
-        'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=1200&q=80',
-        '2026-08-10',
-        '11:00',
-        '16:00',
-        'Innovation Labs Hall A',
-        'Knowledge Village, Tech Hub Campus',
-        'https://maps.google.com',
-        499.00,
-        100,
-        '2026-07-01 00:00:00',
-        '2026-08-09 23:59:59',
-        'completed',
-        '11111111-1111-1111-1111-111111111111'
-    );
-
-    const insertReg = db.prepare(`
-        INSERT INTO registrations (id, event_id, user_id, registration_number, guest_name, guest_email, guest_phone, registration_status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    insertReg.run('r1111111-1111-1111-1111-111111111111', 'a1111111-1111-1111-1111-111111111111', '44444444-4444-4444-4444-444444444444', 'REG-2026-000101', 'Rahul Sharma', 'guest@gmail.com', '+91 9876543213', 'confirmed');
-    insertReg.run('r2222222-2222-2222-2222-222222222222', 'a1111111-1111-1111-1111-111111111111', '55555555-5555-5555-5555-555555555555', 'REG-2026-000102', 'Priya Patel', 'priya@gmail.com', '+91 9876543214', 'confirmed');
-    insertReg.run('r3333333-3333-3333-3333-333333333333', 'a4444444-4444-4444-4444-444444444444', '44444444-4444-4444-4444-444444444444', 'REG-2026-000099', 'Rahul Sharma', 'guest@gmail.com', '+91 9876543213', 'confirmed');
-
-    const insertPay = db.prepare(`
-        INSERT INTO payments (id, registration_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, paid_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    insertPay.run('p1111111-1111-1111-1111-111111111111', 'r1111111-1111-1111-1111-111111111111', 'order_Pz111111111111', 'pay_Pz111111111111', 'sig_mock_hash_111111111111', 1499.00, 'INR', 'paid', new Date().toISOString());
-    insertPay.run('p2222222-2222-2222-2222-222222222222', 'r2222222-2222-2222-2222-222222222222', 'order_Pz222222222222', 'pay_Pz222222222222', 'sig_mock_hash_222222222222', 1499.00, 'INR', 'paid', new Date().toISOString());
-    insertPay.run('p3333333-3333-3333-3333-333333333333', 'r3333333-3333-3333-3333-333333333333', 'order_Pz333333333333', 'pay_Pz333333333333', 'sig_mock_hash_333333333333', 499.00, 'INR', 'paid', '2026-08-10T10:30:00Z');
-
-    const insertTicket = db.prepare(`
-        INSERT INTO tickets (id, registration_id, event_id, user_id, ticket_number, secure_token, qr_code_data, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    insertTicket.run('t1111111-1111-1111-1111-111111111111', 'r1111111-1111-1111-1111-111111111111', 'a1111111-1111-1111-1111-111111111111', '44444444-4444-4444-4444-444444444444', 'EVT-2026-000101', 'EVT-TK-9a8b7c6d5e4f3a2b1c0d', 'EVENT-TICKET:EVT-TK-9a8b7c6d5e4f3a2b1c0d', 'active');
-    insertTicket.run('t2222222-2222-2222-2222-222222222222', 'r2222222-2222-2222-2222-222222222222', 'a1111111-1111-1111-1111-111111111111', '55555555-5555-5555-5555-555555555555', 'EVT-2026-000102', 'EVT-TK-1f2e3d4c5b6a7b8c9d0e', 'EVENT-TICKET:EVT-TK-1f2e3d4c5b6a7b8c9d0e', 'active');
-    insertTicket.run('t3333333-3333-3333-3333-333333333333', 'r3333333-3333-3333-3333-333333333333', 'a4444444-4444-4444-4444-444444444444', '44444444-4444-4444-4444-444444444444', 'EVT-2026-000099', 'EVT-TK-887766554433221100aa', 'EVENT-TICKET:EVT-TK-887766554433221100aa', 'checked_in');
-
-    const insertAtt = db.prepare(`
-        INSERT INTO attendance (id, ticket_id, event_id, registration_id, checked_in_by, checked_in_at, status, device_info)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    insertAtt.run('att11111-1111-1111-1111-111111111111', 't3333333-3333-3333-3333-333333333333', 'a4444444-4444-4444-4444-444444444444', 'r3333333-3333-3333-3333-333333333333', '33333333-3333-3333-3333-333333333333', '2026-08-10T10:45:12Z', 'checked_in', 'Gate Scanner Mobile #01');
-
-    console.log('[Database] Local SQLite Database populated with seed data successfully.');
 }
 
-// Unified Drizzle ORM Query Layer
+// Unified Query Layer Supporting MongoDB, PostgreSQL, and SQLite
 const dbQuery = {
     get mode() { return mode; },
     set mode(val) { mode = val; },
     get db() { return drizzleDb; },
     sqliteDb,
+    mongoModels,
 
     async findUserByEmail(email) {
         return this.findUserByEmailOrPhone(email);
@@ -332,8 +298,29 @@ const dbQuery = {
 
     async findUserByEmailOrPhone(identifier) {
         if (!identifier) return null;
-        const t = getTables();
         const clean = identifier.trim().toLowerCase();
+
+        if (mode === 'mongodb') {
+            try {
+                const u = await mongoModels.User.findOne({
+                    $or: [
+                        { email: clean },
+                        { phone: clean },
+                        { _id: clean }
+                    ]
+                }).lean();
+                if (!u) return null;
+                return {
+                    id: u._id,
+                    ...u,
+                    password_hash: u.password_hash
+                };
+            } catch (err) {
+                return null;
+            }
+        }
+
+        const t = getTables();
         try {
             const results = await drizzleDb.select().from(t.users).where(
                 or(
@@ -355,6 +342,35 @@ const dbQuery = {
 
     async findUserById(id) {
         if (!id) return null;
+
+        if (mode === 'mongodb') {
+            try {
+                const u = await mongoModels.User.findById(id).lean();
+                if (!u) return null;
+                return {
+                    id: u._id,
+                    name: u.name,
+                    email: u.email,
+                    phone: u.phone,
+                    role: u.role,
+                    member_id: u.member_id || null,
+                    memberId: u.member_id || null,
+                    qr_code_data: u.qr_code_data || '',
+                    qrCodeData: u.qr_code_data || '',
+                    qr_token: u.qr_token || null,
+                    qrToken: u.qr_token || null,
+                    qr_status: u.qr_status || 'active',
+                    qrStatus: u.qr_status || 'active',
+                    qr_scanned_at: u.qr_scanned_at || null,
+                    qr_scanned_by: u.qr_scanned_by || null,
+                    qr_device_info: u.qr_device_info || null,
+                    created_at: u.created_at
+                };
+            } catch (err) {
+                return null;
+            }
+        }
+
         const t = getTables();
         try {
             const results = await drizzleDb.select({
@@ -363,15 +379,246 @@ const dbQuery = {
                 email: t.users.email,
                 phone: t.users.phone,
                 role: t.users.role,
+                memberId: t.users.memberId,
+                qrCodeData: t.users.qrCodeData,
+                qrToken: t.users.qrToken,
+                qrStatus: t.users.qrStatus,
+                qrScannedAt: t.users.qrScannedAt,
+                qrScannedBy: t.users.qrScannedBy,
+                qrDeviceInfo: t.users.qrDeviceInfo,
                 created_at: t.users.createdAt
             }).from(t.users).where(eq(t.users.id, id));
-            return results[0] || null;
+            if (!results[0]) return null;
+            const r = results[0];
+            return {
+                ...r,
+                member_id: r.memberId,
+                qr_code_data: r.qrCodeData || '',
+                qr_token: r.qrToken,
+                qr_status: r.qrStatus || 'active',
+                qr_scanned_at: r.qrScannedAt,
+                qr_scanned_by: r.qrScannedBy,
+                qr_device_info: r.qrDeviceInfo
+            };
         } catch (err) {
             return null;
         }
     },
 
+    async findUserByMemberIdOrToken(identifier) {
+        if (!identifier) return null;
+        const clean = String(identifier).trim();
+        const lowerClean = clean.toLowerCase();
+
+        if (mode === 'mongodb') {
+            try {
+                const u = await mongoModels.User.findOne({
+                    $or: [
+                        { qr_token: clean },
+                        { member_id: clean },
+                        { _id: clean },
+                        { email: lowerClean }
+                    ]
+                }).lean();
+                if (!u) return null;
+                return {
+                    id: u._id,
+                    ...u,
+                    member_id: u.member_id || null,
+                    memberId: u.member_id || null,
+                    qr_code_data: u.qr_code_data || '',
+                    qrCodeData: u.qr_code_data || '',
+                    qr_token: u.qr_token || null,
+                    qrToken: u.qr_token || null,
+                    qr_status: u.qr_status || 'active',
+                    qrStatus: u.qr_status || 'active',
+                    qr_scanned_at: u.qr_scanned_at || null,
+                    qr_scanned_by: u.qr_scanned_by || null,
+                    qr_device_info: u.qr_device_info || null
+                };
+            } catch (err) {
+                return null;
+            }
+        }
+
+        const t = getTables();
+        try {
+            const results = await drizzleDb.select().from(t.users).where(
+                or(
+                    eq(t.users.qrToken, clean),
+                    eq(t.users.memberId, clean),
+                    eq(t.users.id, clean),
+                    sql`LOWER(${t.users.email}) = ${lowerClean}`
+                )
+            );
+            if (!results || results.length === 0) return null;
+            const r = results[0];
+            return {
+                ...r,
+                member_id: r.memberId,
+                memberId: r.memberId,
+                qr_code_data: r.qrCodeData || '',
+                qrCodeData: r.qrCodeData || '',
+                qr_token: r.qrToken,
+                qrToken: r.qrToken,
+                qr_status: r.qrStatus || 'active',
+                qrStatus: r.qrStatus || 'active',
+                qr_scanned_at: r.qrScannedAt,
+                qr_scanned_by: r.qrScannedBy,
+                qr_device_info: r.qrDeviceInfo
+            };
+        } catch (err) {
+            return null;
+        }
+    },
+
+    async updateUserMemberPass(userId, passData) {
+        if (mode === 'mongodb') {
+            await mongoModels.User.updateOne({ _id: userId }, {
+                member_id: passData.member_id || passData.memberId,
+                qr_code_data: passData.qr_code_data || passData.qrCodeData || '',
+                qr_token: passData.qr_token || passData.qrToken,
+                qr_status: passData.qr_status || passData.qrStatus || 'active'
+            });
+            return this.findUserById(userId);
+        }
+
+        const t = getTables();
+        await drizzleDb.update(t.users).set({
+            memberId: passData.member_id || passData.memberId,
+            qrCodeData: passData.qr_code_data || passData.qrCodeData || '',
+            qrToken: passData.qr_token || passData.qrToken,
+            qrStatus: passData.qr_status || passData.qrStatus || 'active'
+        }).where(eq(t.users.id, userId));
+        return this.findUserById(userId);
+    },
+
+    async updateUserQrStatus(userId, { status, scannedBy, deviceInfo, scannedAt }) {
+        const timestamp = scannedAt || new Date().toISOString();
+        if (mode === 'mongodb') {
+            await mongoModels.User.updateOne({ _id: userId }, {
+                qr_status: status,
+                qr_scanned_at: timestamp,
+                qr_scanned_by: scannedBy || 'Admin Staff',
+                qr_device_info: deviceInfo || 'Gate Camera Scanner'
+            });
+            return this.findUserById(userId);
+        }
+
+        const t = getTables();
+        await drizzleDb.update(t.users).set({
+            qrStatus: status,
+            qrScannedAt: timestamp,
+            qrScannedBy: scannedBy || 'Admin Staff',
+            qrDeviceInfo: deviceInfo || 'Gate Camera Scanner'
+        }).where(eq(t.users.id, userId));
+        return this.findUserById(userId);
+    },
+
+    async processMemberCheckinAtomic(userId, scannedBy = 'Admin Staff', deviceInfo = 'Gate Scanner') {
+        const user = await this.findUserById(userId);
+        if (!user) {
+            return { success: false, reason: 'INVALID_USER' };
+        }
+
+        if (user.qr_status === 'expired') {
+            return {
+                success: false,
+                reason: 'ALREADY_USED',
+                user,
+                existingCheckin: {
+                    checked_in_at: user.qr_scanned_at,
+                    checked_in_by: user.qr_scanned_by
+                }
+            };
+        }
+
+        const scannedAt = new Date().toISOString();
+        await this.updateUserQrStatus(userId, {
+            status: 'expired',
+            scannedBy,
+            deviceInfo,
+            scannedAt
+        });
+
+        // Insert into attendance table
+        const attId = uuidv4();
+        if (mode === 'mongodb') {
+            await mongoModels.Attendance.create({
+                _id: attId,
+                ticket_id: null,
+                event_id: null,
+                registration_id: null,
+                user_id: user.id,
+                member_id: user.member_id || user.id,
+                checked_in_by: scannedBy,
+                checked_in_at: scannedAt,
+                status: 'expired',
+                device_info: deviceInfo
+            });
+        } else {
+            try {
+                sqliteDb.prepare(`
+                    INSERT INTO member_attendance (id, user_id, member_id, checked_in_by, checked_in_at, status, device_info)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                `).run(
+                    attId,
+                    user.id,
+                    user.member_id || user.id,
+                    scannedBy,
+                    scannedAt,
+                    'expired',
+                    deviceInfo
+                );
+            } catch (e) {
+                console.warn('[Member Attendance insert error]', e.message);
+            }
+        }
+
+        return {
+            success: true,
+            user: {
+                ...user,
+                qr_status: 'expired',
+                qr_scanned_at: scannedAt,
+                qr_scanned_by: scannedBy
+            }
+        };
+    },
+
     async createUser(user) {
+        const memberId = user.member_id || user.memberId || null;
+        const qrCodeData = user.qr_code_data || user.qrCodeData || '';
+        const qrToken = user.qr_token || user.qrToken || null;
+        const qrStatus = user.qr_status || user.qrStatus || 'active';
+
+        if (mode === 'mongodb') {
+            const created = await mongoModels.User.create({
+                _id: user.id || uuidv4(),
+                name: user.name,
+                email: user.email.toLowerCase(),
+                phone: user.phone || '',
+                password_hash: user.password_hash || user.passwordHash,
+                role: user.role || 'guest',
+                member_id: memberId,
+                qr_code_data: qrCodeData,
+                qr_token: qrToken,
+                qr_status: qrStatus
+            });
+            return {
+                id: created._id,
+                name: created.name,
+                email: created.email,
+                phone: created.phone,
+                role: created.role,
+                member_id: created.member_id,
+                memberId: created.member_id,
+                qr_code_data: created.qr_code_data,
+                qr_token: created.qr_token,
+                qr_status: created.qr_status
+            };
+        }
+
         const t = getTables();
         const val = {
             id: user.id,
@@ -379,13 +626,63 @@ const dbQuery = {
             email: user.email.toLowerCase(),
             phone: user.phone || '',
             passwordHash: user.password_hash || user.passwordHash,
-            role: user.role || 'guest'
+            role: user.role || 'guest',
+            memberId: memberId,
+            qrCodeData: qrCodeData,
+            qrToken: qrToken,
+            qrStatus: qrStatus
         };
         await drizzleDb.insert(t.users).values(val);
-        return user;
+        return {
+            ...user,
+            member_id: memberId,
+            memberId: memberId,
+            qr_code_data: qrCodeData,
+            qr_token: qrToken,
+            qr_status: qrStatus
+        };
     },
 
     async getAllUsers(query = {}) {
+        if (mode === 'mongodb') {
+            const filter = {};
+            if (query.role && query.role !== 'all') {
+                filter.role = query.role;
+            }
+            if (query.search) {
+                const regex = new RegExp(query.search.trim(), 'i');
+                filter.$or = [
+                    { name: regex },
+                    { email: regex },
+                    { phone: regex }
+                ];
+            }
+            const users = await mongoModels.User.find(filter).sort({ created_at: -1 }).lean();
+            return Promise.all(users.map(async u => {
+                const regCount = await mongoModels.Registration.countDocuments({ user_id: u._id });
+                return {
+                    id: u._id,
+                    name: u.name,
+                    email: u.email,
+                    phone: u.phone,
+                    role: u.role,
+                    member_id: u.member_id || null,
+                    memberId: u.member_id || null,
+                    qr_code_data: u.qr_code_data || '',
+                    qrCodeData: u.qr_code_data || '',
+                    qr_token: u.qr_token || null,
+                    qrToken: u.qr_token || null,
+                    qr_status: u.qr_status || 'active',
+                    qrStatus: u.qr_status || 'active',
+                    qr_scanned_at: u.qr_scanned_at || null,
+                    qr_scanned_by: u.qr_scanned_by || null,
+                    created_at: u.created_at,
+                    updated_at: u.updated_at,
+                    registrations_count: regCount
+                };
+            }));
+        }
+
         const t = getTables();
         const conditions = [];
         if (query.role && query.role !== 'all') {
@@ -405,6 +702,12 @@ const dbQuery = {
             email: t.users.email,
             phone: t.users.phone,
             role: t.users.role,
+            memberId: t.users.memberId,
+            qrCodeData: t.users.qrCodeData,
+            qrToken: t.users.qrToken,
+            qrStatus: t.users.qrStatus,
+            qrScannedAt: t.users.qrScannedAt,
+            qrScannedBy: t.users.qrScannedBy,
             created_at: t.users.createdAt,
             updated_at: t.users.updatedAt
         }).from(t.users);
@@ -418,6 +721,12 @@ const dbQuery = {
             const regCountRes = await drizzleDb.select({ count: count() }).from(t.registrations).where(eq(t.registrations.userId, u.id));
             return {
                 ...u,
+                member_id: u.memberId,
+                qr_code_data: u.qrCodeData || '',
+                qr_token: u.qrToken,
+                qr_status: u.qrStatus || 'active',
+                qr_scanned_at: u.qrScannedAt,
+                qr_scanned_by: u.qrScannedBy,
                 created_at: u.created_at || u.createdAt,
                 registrations_count: regCountRes[0] ? Number(regCountRes[0].count) : 0
             };
@@ -425,16 +734,27 @@ const dbQuery = {
     },
 
     async updateUserRole(userId, role) {
-        const t = getTables();
         const validRoles = ['guest', 'scanner_staff', 'event_admin', 'super_admin'];
         if (!validRoles.includes(role)) {
             throw new Error(`Invalid role: ${role}`);
         }
+
+        if (mode === 'mongodb') {
+            await mongoModels.User.updateOne({ _id: userId }, { role });
+            return this.findUserById(userId);
+        }
+
+        const t = getTables();
         await drizzleDb.update(t.users).set({ role }).where(eq(t.users.id, userId));
         return this.findUserById(userId);
     },
 
     async deleteUser(userId) {
+        if (mode === 'mongodb') {
+            await mongoModels.User.deleteOne({ _id: userId });
+            return true;
+        }
+
         const t = getTables();
         await drizzleDb.delete(t.users).where(eq(t.users.id, userId));
         return true;
@@ -449,6 +769,36 @@ const dbQuery = {
     },
 
     async getEvents(query = {}) {
+        if (mode === 'mongodb') {
+            const filter = {};
+            if (query.status) filter.status = query.status;
+            if (query.category && query.category !== 'All') filter.category = query.category;
+            if (query.search) {
+                const regex = new RegExp(query.search.trim(), 'i');
+                filter.$or = [
+                    { title: regex },
+                    { description: regex },
+                    { venue: regex },
+                    { iti_trade: regex },
+                    { iti_institute: regex }
+                ];
+            }
+            const events = await mongoModels.Event.find(filter).sort({ created_at: -1 }).lean();
+            return Promise.all(events.map(async (evt) => {
+                const confirmedCount = await mongoModels.Registration.countDocuments({
+                    event_id: evt._id,
+                    registration_status: 'confirmed'
+                });
+                return {
+                    id: evt._id,
+                    ...evt,
+                    ticket_price: parseFloat(evt.ticket_price || 0),
+                    confirmed_registrations: confirmedCount,
+                    seats_remaining: Math.max(0, (evt.capacity || 100) - confirmedCount)
+                };
+            }));
+        }
+
         const t = getTables();
         const conditions = [];
         if (query.status) conditions.push(eq(t.events.status, query.status));
@@ -461,35 +811,11 @@ const dbQuery = {
         if (conditions.length > 0) q = q.where(and(...conditions));
         const events = await q;
 
-        const parseItiMeta = (desc) => {
-            if (!desc) return { description: '', iti_trade: '', iti_institute: '', iti_eligibility: '' };
-            const match = desc.match(/---ITI_META---\s*\n([\s\S]*?)\n\s*---END_ITI_META---\s*\n?([\s\S]*)/);
-            if (match) {
-                try {
-                    const meta = JSON.parse(match[1]);
-                    return {
-                        description: match[2].trim(),
-                        iti_trade: meta.trade || '',
-                        iti_institute: meta.institute || '',
-                        iti_eligibility: meta.eligibility || ''
-                    };
-                } catch (e) {
-                    return { description: desc, iti_trade: '', iti_institute: '', iti_eligibility: '' };
-                }
-            }
-            return { description: desc, iti_trade: '', iti_institute: '', iti_eligibility: '' };
-        };
-
         return Promise.all(events.map(async (evt) => {
             const regCountRes = await drizzleDb.select({ count: count() }).from(t.registrations).where(and(eq(t.registrations.eventId, evt.id), eq(t.registrations.registrationStatus, 'confirmed')));
             const countVal = regCountRes[0] ? Number(regCountRes[0].count) : 0;
-            const parsedDesc = parseItiMeta(evt.description);
             return {
                 ...evt,
-                description: parsedDesc.description,
-                iti_trade: parsedDesc.iti_trade,
-                iti_institute: parsedDesc.iti_institute,
-                iti_eligibility: parsedDesc.iti_eligibility,
                 cover_image_url: evt.coverImageUrl,
                 event_date: evt.eventDate,
                 start_time: evt.startTime,
@@ -508,6 +834,24 @@ const dbQuery = {
     },
 
     async getEventById(id) {
+        if (mode === 'mongodb') {
+            const evt = await mongoModels.Event.findById(id).lean();
+            if (!evt) return null;
+            const confirmedCount = await mongoModels.Registration.countDocuments({
+                event_id: id,
+                registration_status: 'confirmed'
+            });
+            const gallery = await mongoModels.EventImage.find({ event_id: id }).lean();
+            return {
+                id: evt._id,
+                ...evt,
+                ticket_price: parseFloat(evt.ticket_price || 0),
+                confirmed_registrations: confirmedCount,
+                seats_remaining: Math.max(0, (evt.capacity || 100) - confirmedCount),
+                gallery: gallery.map(g => ({ id: g._id, ...g }))
+            };
+        }
+
         const t = getTables();
         const events = await drizzleDb.select().from(t.events).where(eq(t.events.id, id));
         if (!events || events.length === 0) return null;
@@ -517,33 +861,8 @@ const dbQuery = {
         const countVal = regCountRes[0] ? Number(regCountRes[0].count) : 0;
         const gallery = await drizzleDb.select().from(t.eventImages).where(eq(t.eventImages.eventId, id));
 
-        const parseItiMeta = (desc) => {
-            if (!desc) return { description: '', iti_trade: '', iti_institute: '', iti_eligibility: '' };
-            const match = desc.match(/---ITI_META---\s*\n([\s\S]*?)\n\s*---END_ITI_META---\s*\n?([\s\S]*)/);
-            if (match) {
-                try {
-                    const meta = JSON.parse(match[1]);
-                    return {
-                        description: match[2].trim(),
-                        iti_trade: meta.trade || '',
-                        iti_institute: meta.institute || '',
-                        iti_eligibility: meta.eligibility || ''
-                    };
-                } catch (e) {
-                    return { description: desc, iti_trade: '', iti_institute: '', iti_eligibility: '' };
-                }
-            }
-            return { description: desc, iti_trade: '', iti_institute: '', iti_eligibility: '' };
-        };
-
-        const parsedDesc = parseItiMeta(evt.description);
-
         return {
             ...evt,
-            description: parsedDesc.description,
-            iti_trade: parsedDesc.iti_trade,
-            iti_institute: parsedDesc.iti_institute,
-            iti_eligibility: parsedDesc.iti_eligibility,
             cover_image_url: evt.coverImageUrl,
             event_date: evt.eventDate,
             start_time: evt.startTime,
@@ -562,6 +881,33 @@ const dbQuery = {
     },
 
     async createEvent(eventData) {
+        if (mode === 'mongodb') {
+            const val = {
+                _id: eventData.id || uuidv4(),
+                title: eventData.title,
+                description: eventData.description,
+                category: eventData.category || 'General',
+                cover_image_url: eventData.cover_image_url,
+                event_date: eventData.event_date,
+                start_time: eventData.start_time,
+                end_time: eventData.end_time,
+                venue: eventData.venue,
+                address: eventData.address,
+                google_maps_url: eventData.google_maps_url,
+                ticket_price: parseFloat(eventData.ticket_price || 0),
+                capacity: eventData.capacity || 100,
+                registration_open_at: eventData.registration_open_at,
+                registration_close_at: eventData.registration_close_at,
+                status: eventData.status || 'draft',
+                created_by: eventData.created_by,
+                iti_trade: eventData.iti_trade || '',
+                iti_institute: eventData.iti_institute || '',
+                iti_eligibility: eventData.iti_eligibility || ''
+            };
+            const created = await mongoModels.Event.create(val);
+            return { id: created._id, ...val };
+        }
+
         const t = getTables();
         const val = {
             id: eventData.id,
@@ -587,6 +933,11 @@ const dbQuery = {
     },
 
     async updateEvent(id, updates) {
+        if (mode === 'mongodb') {
+            await mongoModels.Event.updateOne({ _id: id }, updates);
+            return this.getEventById(id);
+        }
+
         const t = getTables();
         const drizzleUpdates = {};
         if (updates.title !== undefined) drizzleUpdates.title = updates.title;
@@ -609,7 +960,36 @@ const dbQuery = {
         return this.getEventById(id);
     },
 
+    async deleteEvent(id) {
+        if (mode === 'mongodb') {
+            await mongoModels.Event.deleteOne({ _id: id });
+            await mongoModels.Registration.deleteMany({ event_id: id });
+            await mongoModels.Ticket.deleteMany({ event_id: id });
+            return true;
+        }
+
+        const t = getTables();
+        await drizzleDb.delete(t.events).where(eq(t.events.id, id));
+        return true;
+    },
+
     async createRegistration(regData) {
+        if (mode === 'mongodb') {
+            const val = {
+                _id: regData.id || uuidv4(),
+                event_id: regData.event_id,
+                user_id: regData.user_id,
+                registration_number: regData.registration_number,
+                guest_name: regData.guest_name,
+                guest_email: regData.guest_email,
+                guest_phone: regData.guest_phone,
+                custom_answers: regData.custom_answers || {},
+                registration_status: regData.registration_status || 'pending'
+            };
+            const created = await mongoModels.Registration.create(val);
+            return { id: created._id, ...val };
+        }
+
         const t = getTables();
         const val = {
             id: regData.id,
@@ -627,6 +1007,21 @@ const dbQuery = {
     },
 
     async getRegistrationById(id) {
+        if (mode === 'mongodb') {
+            const reg = await mongoModels.Registration.findById(id).lean();
+            if (!reg) return null;
+            const event = await mongoModels.Event.findById(reg.event_id).lean();
+            const payment = await mongoModels.Payment.findOne({ registration_id: id }).lean();
+            const ticket = await mongoModels.Ticket.findOne({ registration_id: id }).lean();
+            return {
+                id: reg._id,
+                ...reg,
+                event: event ? { id: event._id, ...event } : null,
+                payment: payment ? { id: payment._id, ...payment } : null,
+                ticket: ticket ? { id: ticket._id, ...ticket } : null
+            };
+        }
+
         const t = getTables();
         const regs = await drizzleDb.select().from(t.registrations).where(eq(t.registrations.id, id));
         if (!regs || regs.length === 0) return null;
@@ -645,7 +1040,6 @@ const dbQuery = {
             guest_email: reg.guestEmail,
             guest_phone: reg.guestPhone,
             registration_status: reg.registrationStatus,
-            custom_answers: reg.customAnswers,
             created_at: reg.createdAt,
             event: events[0] ? { ...events[0], cover_image_url: events[0].coverImageUrl, event_date: events[0].eventDate, start_time: events[0].startTime } : null,
             payment: payments[0] ? { ...payments[0], razorpay_order_id: payments[0].razorpayOrderId } : null,
@@ -654,6 +1048,22 @@ const dbQuery = {
     },
 
     async getUserRegistrations(userId) {
+        if (mode === 'mongodb') {
+            const regs = await mongoModels.Registration.find({ user_id: userId }).sort({ created_at: -1 }).lean();
+            return Promise.all(regs.map(async reg => {
+                const event = await mongoModels.Event.findById(reg.event_id).lean();
+                const payment = await mongoModels.Payment.findOne({ registration_id: reg._id }).lean();
+                const ticket = await mongoModels.Ticket.findOne({ registration_id: reg._id }).lean();
+                return {
+                    id: reg._id,
+                    ...reg,
+                    event: event ? { id: event._id, ...event } : null,
+                    payment: payment ? { id: payment._id, ...payment } : null,
+                    ticket: ticket ? { id: ticket._id, ...ticket } : null
+                };
+            }));
+        }
+
         const t = getTables();
         const regs = await drizzleDb.select().from(t.registrations).where(eq(t.registrations.userId, userId)).orderBy(desc(t.registrations.createdAt));
         return Promise.all(regs.map(async reg => {
@@ -678,11 +1088,32 @@ const dbQuery = {
     },
 
     async updateRegistrationStatus(registrationId, status) {
+        if (mode === 'mongodb') {
+            await mongoModels.Registration.updateOne({ _id: registrationId }, { registration_status: status });
+            return;
+        }
+
         const t = getTables();
         await drizzleDb.update(t.registrations).set({ registrationStatus: status }).where(eq(t.registrations.id, registrationId));
     },
 
     async createPayment(payData) {
+        if (mode === 'mongodb') {
+            const val = {
+                _id: payData.id || uuidv4(),
+                registration_id: payData.registration_id,
+                razorpay_order_id: payData.razorpay_order_id,
+                razorpay_payment_id: payData.razorpay_payment_id || null,
+                razorpay_signature: payData.razorpay_signature || null,
+                amount: parseFloat(payData.amount || 0),
+                currency: payData.currency || 'INR',
+                status: payData.status || 'pending',
+                paid_at: payData.paid_at || null
+            };
+            const created = await mongoModels.Payment.create(val);
+            return { id: created._id, ...val };
+        }
+
         const t = getTables();
         const val = {
             id: payData.id,
@@ -700,6 +1131,12 @@ const dbQuery = {
     },
 
     async getPaymentByOrderId(orderId) {
+        if (mode === 'mongodb') {
+            const pay = await mongoModels.Payment.findOne({ razorpay_order_id: orderId }).lean();
+            if (!pay) return null;
+            return { id: pay._id, ...pay };
+        }
+
         const t = getTables();
         const payments = await drizzleDb.select().from(t.payments).where(eq(t.payments.razorpayOrderId, orderId));
         if (!payments || payments.length === 0) return null;
@@ -715,6 +1152,11 @@ const dbQuery = {
     },
 
     async updatePayment(orderId, updates) {
+        if (mode === 'mongodb') {
+            await mongoModels.Payment.updateOne({ razorpay_order_id: orderId }, updates);
+            return this.getPaymentByOrderId(orderId);
+        }
+
         const t = getTables();
         const drizzleUpdates = {};
         if (updates.razorpay_payment_id !== undefined) drizzleUpdates.razorpayPaymentId = updates.razorpay_payment_id;
@@ -729,6 +1171,21 @@ const dbQuery = {
     },
 
     async createTicket(ticketData) {
+        if (mode === 'mongodb') {
+            const val = {
+                _id: ticketData.id || uuidv4(),
+                registration_id: ticketData.registration_id,
+                event_id: ticketData.event_id,
+                user_id: ticketData.user_id,
+                ticket_number: ticketData.ticket_number,
+                secure_token: ticketData.secure_token,
+                qr_code_data: ticketData.qr_code_data,
+                status: ticketData.status || 'active'
+            };
+            const created = await mongoModels.Ticket.create(val);
+            return { id: created._id, ...val };
+        }
+
         const t = getTables();
         const val = {
             id: ticketData.id,
@@ -745,6 +1202,27 @@ const dbQuery = {
     },
 
     async getTicketByToken(token) {
+        if (mode === 'mongodb') {
+            const ticket = await mongoModels.Ticket.findOne({
+                $or: [{ secure_token: token }, { ticket_number: token }, { _id: token }]
+            }).lean();
+            if (!ticket) return null;
+
+            const event = await mongoModels.Event.findById(ticket.event_id).lean();
+            const reg = await mongoModels.Registration.findById(ticket.registration_id).lean();
+            const user = await mongoModels.User.findById(ticket.user_id).lean();
+            const att = await mongoModels.Attendance.findOne({ ticket_id: ticket._id }).lean();
+
+            return {
+                id: ticket._id,
+                ...ticket,
+                event: event ? { id: event._id, title: event.title } : null,
+                registration: reg ? { id: reg._id, ...reg } : null,
+                user: user ? { id: user._id, name: user.name, email: user.email, phone: user.phone } : null,
+                attendance: att ? { id: att._id, ...att } : null
+            };
+        }
+
         const t = getTables();
         const tickets = await drizzleDb.select().from(t.tickets).where(or(eq(t.tickets.secureToken, token), eq(t.tickets.ticketNumber, token)));
         if (!tickets || tickets.length === 0) return null;
@@ -773,7 +1251,7 @@ const dbQuery = {
                 guest_name: regs[0].guestName,
                 guest_email: regs[0].guestEmail,
                 guest_phone: regs[0].guestPhone,
-                registration_status: regs[0].registrationStatus || regs[0].registration_status || 'pending'
+                registration_status: regs[0].registrationStatus || 'pending'
             } : null,
             user: users[0] || null,
             attendance: atts[0] || null
@@ -781,6 +1259,48 @@ const dbQuery = {
     },
 
     async processCheckinAtomic(ticketId, eventId, registrationId, checkedInBy, deviceInfo = 'Gate Scanner') {
+        if (mode === 'mongodb') {
+            const existing = await mongoModels.Attendance.findOne({ ticket_id: ticketId }).lean();
+            if (existing) {
+                return {
+                    success: false,
+                    reason: 'ALREADY_USED',
+                    existingCheckin: existing
+                };
+            }
+
+            const ticket = await mongoModels.Ticket.findById(ticketId).lean();
+            if (!ticket || ticket.status === 'cancelled') {
+                return { success: false, reason: 'INVALID_TICKET' };
+            }
+            if (ticket.status === 'expired') {
+                return {
+                    success: false,
+                    reason: 'ALREADY_USED',
+                    existingCheckin: existing || { checked_in_at: ticket.updated_at }
+                };
+            }
+
+            const checkinRecord = await mongoModels.Attendance.create({
+                _id: uuidv4(),
+                ticket_id: ticketId,
+                event_id: eventId,
+                registration_id: registrationId,
+                checked_in_by: checkedInBy,
+                checked_in_at: new Date().toISOString(),
+                status: 'expired',
+                device_info: deviceInfo
+            });
+
+            // Mark QR ticket as expired upon Admin scanning
+            await mongoModels.Ticket.updateOne({ _id: ticketId }, { status: 'expired' });
+
+            return {
+                success: true,
+                attendance: { id: checkinRecord._id, ...checkinRecord.toObject(), status: 'expired' }
+            };
+        }
+
         const t = getTables();
         const existing = await drizzleDb.select().from(t.attendance).where(eq(t.attendance.ticketId, ticketId));
         if (existing && existing.length > 0) {
@@ -799,116 +1319,156 @@ const dbQuery = {
         if (!tickets || tickets.length === 0 || tickets[0].status === 'cancelled') {
             return { success: false, reason: 'INVALID_TICKET' };
         }
+        if (tickets[0].status === 'expired') {
+            return {
+                success: false,
+                reason: 'ALREADY_USED',
+                existingCheckin: { checked_in_at: tickets[0].updatedAt || tickets[0].created_at }
+            };
+        }
 
-        const attId = require('crypto').randomUUID();
-        const val = {
+        const attId = uuidv4();
+        await drizzleDb.insert(t.attendance).values({
             id: attId,
             ticketId,
             eventId,
             registrationId,
             checkedInBy: checkedInBy || null,
-            status: 'checked_in',
+            status: 'expired',
             deviceInfo: deviceInfo || 'Gate Scanner'
-        };
-        await drizzleDb.insert(t.attendance).values(val);
-        await drizzleDb.update(t.tickets).set({ status: 'checked_in' }).where(eq(t.tickets.id, ticketId));
+        });
 
-        const newAtt = await drizzleDb.select().from(t.attendance).where(eq(t.attendance.id, attId));
-        return { success: true, checkin: newAtt[0] };
+        // Mark QR ticket as expired upon Admin scanning
+        await drizzleDb.update(t.tickets).set({ status: 'expired' }).where(eq(t.tickets.id, ticketId));
+
+        return {
+            success: true,
+            attendance: {
+                id: attId,
+                ticket_id: ticketId,
+                event_id: eventId,
+                registration_id: registrationId,
+                checked_in_at: new Date().toISOString(),
+                status: 'expired'
+            }
+        };
     },
 
-    async getAdminDashboardStats() {
+    async getAllAttendance() {
+        if (mode === 'mongodb') {
+            const list = await mongoModels.Attendance.find().sort({ checked_in_at: -1 }).lean();
+            return Promise.all(list.map(async att => {
+                let ticketNum = '';
+                let guestName = '';
+                let guestEmail = '';
+                let guestPhone = '';
+                let eventTitle = '';
+
+                if (att.ticket_id) {
+                    const tk = await mongoModels.Ticket.findById(att.ticket_id).lean();
+                    const reg = await mongoModels.Registration.findById(att.registration_id).lean();
+                    const evt = await mongoModels.Event.findById(att.event_id).lean();
+                    ticketNum = tk?.ticket_number || '';
+                    guestName = reg?.guest_name || '';
+                    guestEmail = reg?.guest_email || '';
+                    guestPhone = reg?.guest_phone || '';
+                    eventTitle = evt?.title || '';
+                }
+
+                if (!guestName && (att.user_id || att.member_id)) {
+                    const usr = await mongoModels.User.findById(att.user_id).lean() || 
+                                await mongoModels.User.findOne({ member_id: att.member_id }).lean();
+                    if (usr) {
+                        ticketNum = usr.member_id || att.member_id || 'MEMBER-PASS';
+                        guestName = usr.name;
+                        guestEmail = usr.email;
+                        guestPhone = usr.phone || '';
+                        eventTitle = 'Member Gate Admission';
+                    }
+                }
+
+                return {
+                    id: att._id,
+                    ...att,
+                    ticket_number: ticketNum,
+                    guest_name: guestName,
+                    guest_email: guestEmail,
+                    guest_phone: guestPhone,
+                    event_title: eventTitle
+                };
+            }));
+        }
+
         const t = getTables();
-        const totalEventsRes = await drizzleDb.select({ count: count() }).from(t.events);
-        const totalEvents = Number(totalEventsRes[0]?.count || 0);
+        const attendanceList = await drizzleDb.select().from(t.attendance).orderBy(desc(t.attendance.checkedInAt));
+        const eventAttList = await Promise.all(attendanceList.map(async att => {
+            let ticketNum = '';
+            let guestName = '';
+            let guestEmail = '';
+            let guestPhone = '';
+            let eventTitle = '';
 
-        const upcomingEventsRes = await drizzleDb.select({ count: count() }).from(t.events).where(or(eq(t.events.status, 'published'), eq(t.events.status, 'registration_open')));
-        const upcomingEvents = Number(upcomingEventsRes[0]?.count || 0);
+            if (att.ticketId) {
+                const tk = await drizzleDb.select({ ticketNumber: t.tickets.ticketNumber }).from(t.tickets).where(eq(t.tickets.id, att.ticketId));
+                const reg = await drizzleDb.select().from(t.registrations).where(eq(t.registrations.id, att.registrationId));
+                const evt = await drizzleDb.select({ title: t.events.title }).from(t.events).where(eq(t.events.id, att.eventId));
+                ticketNum = tk[0]?.ticketNumber || '';
+                guestName = reg[0]?.guestName || '';
+                guestEmail = reg[0]?.guestEmail || '';
+                guestPhone = reg[0]?.guestPhone || '';
+                eventTitle = evt[0]?.title || '';
+            }
 
-        const totalRegsRes = await drizzleDb.select({ count: count() }).from(t.registrations);
-        const totalRegistrations = Number(totalRegsRes[0]?.count || 0);
-
-        const paidPaymentsRes = await drizzleDb.select({ count: count(), totalRev: sum(t.payments.amount) }).from(t.payments).where(eq(t.payments.status, 'paid'));
-        const confirmedPayments = Number(paidPaymentsRes[0]?.count || 0);
-        const totalRevenue = parseFloat(paidPaymentsRes[0]?.totalRev || 0);
-
-        const checkedInRes = await drizzleDb.select({ count: count() }).from(t.attendance).where(eq(t.attendance.status, 'checked_in'));
-        const checkedInCount = Number(checkedInRes[0]?.count || 0);
-
-        const recentRegs = await drizzleDb.select().from(t.registrations).orderBy(desc(t.registrations.createdAt)).limit(10);
-        const recentRegistrations = await Promise.all(recentRegs.map(async reg => {
-            const evt = await drizzleDb.select({ title: t.events.title }).from(t.events).where(eq(t.events.id, reg.eventId));
-            const pay = await drizzleDb.select({ status: t.payments.status }).from(t.payments).where(eq(t.payments.registrationId, reg.id));
             return {
-                ...reg,
-                registration_number: reg.registrationNumber,
-                guest_name: reg.guestName,
-                guest_email: reg.guestEmail,
-                guest_phone: reg.guestPhone,
-                event_title: evt[0]?.title || '',
-                payment_status: pay[0]?.status || 'pending'
+                ...att,
+                ticket_number: ticketNum,
+                guest_name: guestName,
+                guest_email: guestEmail,
+                guest_phone: guestPhone,
+                event_title: eventTitle
             };
         }));
 
-        return {
-            totalEvents,
-            upcomingEvents,
-            totalRegistrations,
-            confirmedPayments,
-            totalRevenue,
-            checkedInCount,
-            recentRegistrations
-        };
-    },
+        let memberAttList = [];
+        try {
+            const rows = sqliteDb.prepare("SELECT * FROM member_attendance ORDER BY checked_in_at DESC").all();
+            memberAttList = await Promise.all(rows.map(async m => {
+                const usr = await this.findUserById(m.user_id);
+                return {
+                    id: m.id,
+                    checked_in_at: m.checked_in_at,
+                    checkedInAt: m.checked_in_at,
+                    ticket_number: m.member_id || usr?.member_id || 'MEMBER-PASS',
+                    guest_name: usr?.name || 'Member',
+                    guest_email: usr?.email || '',
+                    guest_phone: usr?.phone || '',
+                    event_title: 'Member Gate Admission',
+                    device_info: m.device_info,
+                    status: m.status || 'expired'
+                };
+            }));
+        } catch(e) {}
 
-    async getEventImages(eventId) {
-        const t = getTables();
-        const images = await drizzleDb.select().from(t.eventImages).where(eq(t.eventImages.eventId, eventId)).orderBy(desc(t.eventImages.createdAt));
-        return images.map(img => ({
-            ...img,
-            event_id: img.eventId,
-            image_url: img.imageUrl,
-            uploaded_by: img.uploadedBy,
-            created_at: img.createdAt
-        }));
-    },
-
-    async addEventImage(imageData) {
-        const t = getTables();
-        const val = {
-            id: imageData.id,
-            eventId: imageData.event_id,
-            imageUrl: imageData.image_url,
-            caption: imageData.caption || '',
-            uploadedBy: imageData.uploaded_by || null
-        };
-        await drizzleDb.insert(t.eventImages).values(val);
-        return imageData;
-    },
-
-    async deleteEventImage(imageId) {
-        const t = getTables();
-        await drizzleDb.delete(t.eventImages).where(eq(t.eventImages.id, imageId));
-    },
-
-    async getWebhookEvent(eventId) {
-        const t = getTables();
-        const res = await drizzleDb.select().from(t.webhookEvents).where(eq(t.webhookEvents.eventId, eventId));
-        return res[0] || null;
-    },
-
-    async createWebhookEvent(eventData) {
-        const t = getTables();
-        const val = {
-            id: eventData.id,
-            eventId: eventData.event_id,
-            eventType: eventData.event_type,
-            payload: typeof eventData.payload === 'string' ? eventData.payload : JSON.stringify(eventData.payload)
-        };
-        await drizzleDb.insert(t.webhookEvents).values(val);
+        return [...eventAttList, ...memberAttList].sort((a,b) => new Date(b.checked_in_at || b.checkedInAt) - new Date(a.checked_in_at || a.checkedInAt));
     },
 
     async getEventAttendance(eventId) {
+        if (mode === 'mongodb') {
+            const list = await mongoModels.Attendance.find({ event_id: eventId }).sort({ checked_in_at: -1 }).lean();
+            return Promise.all(list.map(async att => {
+                const tk = await mongoModels.Ticket.findById(att.ticket_id).lean();
+                const reg = await mongoModels.Registration.findById(att.registration_id).lean();
+                return {
+                    id: att._id,
+                    ...att,
+                    ticket_number: tk?.ticket_number || '',
+                    guest_name: reg?.guest_name || '',
+                    guest_email: reg?.guest_email || '',
+                    guest_phone: reg?.guest_phone || ''
+                };
+            }));
+        }
+
         const t = getTables();
         const list = await drizzleDb.select().from(t.attendance).where(eq(t.attendance.eventId, eventId)).orderBy(desc(t.attendance.checkedInAt));
         return Promise.all(list.map(async att => {
@@ -927,6 +1487,29 @@ const dbQuery = {
     },
 
     async getAllRegistrations() {
+        if (mode === 'mongodb') {
+            const regs = await mongoModels.Registration.find().sort({ created_at: -1 }).lean();
+            return Promise.all(regs.map(async reg => {
+                const evt = await mongoModels.Event.findById(reg.event_id).lean();
+                const pay = await mongoModels.Payment.findOne({ registration_id: reg._id }).lean();
+                const tk = await mongoModels.Ticket.findOne({ registration_id: reg._id }).lean();
+                let att = null;
+                if (tk) {
+                    att = await mongoModels.Attendance.findOne({ ticket_id: tk._id }).lean();
+                }
+                return {
+                    id: reg._id,
+                    ...reg,
+                    event_title: evt?.title || '',
+                    payment_status: pay?.status || 'pending',
+                    amount: pay?.amount || 0,
+                    ticket_number: tk?.ticket_number || null,
+                    ticket_status: tk?.status || null,
+                    checked_in_at: att?.checked_in_at || null
+                };
+            }));
+        }
+
         const t = getTables();
         const regs = await drizzleDb.select().from(t.registrations).orderBy(desc(t.registrations.createdAt));
         return Promise.all(regs.map(async reg => {
@@ -957,6 +1540,25 @@ const dbQuery = {
     },
 
     async getAllPayments() {
+        if (mode === 'mongodb') {
+            const payments = await mongoModels.Payment.find().sort({ created_at: -1 }).lean();
+            return Promise.all(payments.map(async pay => {
+                const reg = await mongoModels.Registration.findById(pay.registration_id).lean();
+                let evtTitle = '';
+                if (reg) {
+                    const evt = await mongoModels.Event.findById(reg.event_id).lean();
+                    evtTitle = evt?.title || '';
+                }
+                return {
+                    id: pay._id,
+                    ...pay,
+                    guest_name: reg?.guest_name || '',
+                    guest_email: reg?.guest_email || '',
+                    event_title: evtTitle
+                };
+            }));
+        }
+
         const t = getTables();
         const payments = await drizzleDb.select().from(t.payments).orderBy(desc(t.payments.createdAt));
         return Promise.all(payments.map(async pay => {
@@ -978,34 +1580,154 @@ const dbQuery = {
         }));
     },
 
-    async getAllAttendance() {
-        const t = getTables();
-        const attendanceList = await drizzleDb.select().from(t.attendance).orderBy(desc(t.attendance.checkedInAt));
-        return Promise.all(attendanceList.map(async att => {
-            const tk = await drizzleDb.select({ ticketNumber: t.tickets.ticketNumber }).from(t.tickets).where(eq(t.tickets.id, att.ticketId));
-            const reg = await drizzleDb.select().from(t.registrations).where(eq(t.registrations.id, att.registrationId));
-            const evt = await drizzleDb.select({ title: t.events.title }).from(t.events).where(eq(t.events.id, att.eventId));
-            return {
-                ...att,
-                ticket_number: tk[0]?.ticketNumber || '',
-                guest_name: reg[0]?.guestName || '',
-                guest_email: reg[0]?.guestEmail || '',
-                guest_phone: reg[0]?.guestPhone || '',
-                event_title: evt[0]?.title || ''
+    async addEventImage(imageData) {
+        if (mode === 'mongodb') {
+            const val = {
+                _id: imageData.id || uuidv4(),
+                event_id: imageData.event_id,
+                image_url: imageData.image_url,
+                caption: imageData.caption || '',
+                uploaded_by: imageData.uploaded_by || null
             };
+            const created = await mongoModels.EventImage.create(val);
+            return { id: created._id, ...val };
+        }
+
+        const t = getTables();
+        const val = {
+            id: imageData.id,
+            eventId: imageData.event_id,
+            imageUrl: imageData.image_url,
+            caption: imageData.caption || '',
+            uploadedBy: imageData.uploaded_by || null
+        };
+        await drizzleDb.insert(t.eventImages).values(val);
+        return imageData;
+    },
+
+    async getEventImages(eventId) {
+        if (mode === 'mongodb') {
+            const images = await mongoModels.EventImage.find({ event_id: eventId }).sort({ created_at: -1 }).lean();
+            return images.map(img => ({ id: img._id, ...img }));
+        }
+
+        const t = getTables();
+        const images = await drizzleDb.select().from(t.eventImages).where(eq(t.eventImages.eventId, eventId)).orderBy(desc(t.eventImages.createdAt));
+        return images.map(img => ({
+            id: img.id,
+            event_id: img.eventId,
+            image_url: img.imageUrl,
+            caption: img.caption,
+            uploaded_by: img.uploadedBy,
+            created_at: img.createdAt
         }));
     },
 
-    async initiateRefund(paymentId) {
+    async deleteEventImage(eventId, imageId) {
+        if (mode === 'mongodb') {
+            await mongoModels.EventImage.deleteOne({ _id: imageId, event_id: eventId });
+            return true;
+        }
+
         const t = getTables();
+        await drizzleDb.delete(t.eventImages).where(and(eq(t.eventImages.id, imageId), eq(t.eventImages.eventId, eventId)));
+        return true;
+    },
+
+    async initiateRefund(paymentId) {
         const refId = `ref_mock_${Date.now()}`;
+        if (mode === 'mongodb') {
+            await mongoModels.Payment.updateOne(
+                { $or: [{ _id: paymentId }, { razorpay_payment_id: paymentId }] },
+                { status: 'refunded', refund_status: 'processed', refund_id: refId }
+            );
+            return { success: true, refundId: refId };
+        }
+
+        const t = getTables();
         await drizzleDb.update(t.payments)
             .set({ status: 'refunded', refundStatus: 'processed', refundId: refId })
             .where(or(eq(t.payments.id, paymentId), eq(t.payments.razorpayPaymentId, paymentId)));
         return { success: true, refundId: refId };
     },
 
+    async getAdminDashboardStats() {
+        return this.getDashboardStats();
+    },
+
+    async getDashboardStats() {
+        if (mode === 'mongodb') {
+            const totalEvents = await mongoModels.Event.countDocuments();
+            const upcomingEvents = await mongoModels.Event.countDocuments({ status: 'registration_open' });
+            const totalRegistrations = await mongoModels.Registration.countDocuments();
+            const confirmedPayments = await mongoModels.Registration.countDocuments({ registration_status: 'confirmed' });
+            const checkedInCount = await mongoModels.Attendance.countDocuments();
+
+            const paidPayments = await mongoModels.Payment.find({ status: 'paid' }).lean();
+            const totalRevenue = paidPayments.reduce((acc, p) => acc + (p.amount || 0), 0);
+
+            const recentRegistrations = await this.getAllRegistrations();
+
+            return {
+                totalEvents,
+                upcomingEvents,
+                totalRegistrations,
+                confirmedPayments,
+                checkedInCount,
+                totalRevenue,
+                recentRegistrations: recentRegistrations.slice(0, 10)
+            };
+        }
+
+        const t = getTables();
+        const evts = await drizzleDb.select().from(t.events);
+        const regs = await drizzleDb.select().from(t.registrations);
+        const atts = await drizzleDb.select().from(t.attendance);
+        const pays = await drizzleDb.select().from(t.payments).where(eq(t.payments.status, 'paid'));
+
+        const totalRevenue = pays.reduce((acc, p) => acc + parseFloat(p.amount || 0), 0);
+        const upcomingEvents = evts.filter(e => e.status === 'registration_open').length;
+        const confirmedPayments = regs.filter(r => r.registrationStatus === 'confirmed').length;
+
+        const recent = await this.getAllRegistrations();
+
+        return {
+            totalEvents: evts.length,
+            upcomingEvents,
+            totalRegistrations: regs.length,
+            confirmedPayments,
+            checkedInCount: atts.length,
+            totalRevenue,
+            recentRegistrations: recent.slice(0, 10)
+        };
+    },
+
+    async createWebhookEvent(eventData) {
+        if (mode === 'mongodb') {
+            return eventData;
+        }
+        const t = getTables();
+        const val = {
+            id: eventData.id,
+            eventId: eventData.event_id,
+            eventType: eventData.event_type,
+            payload: typeof eventData.payload === 'string' ? eventData.payload : JSON.stringify(eventData.payload)
+        };
+        await drizzleDb.insert(t.webhookEvents).values(val);
+    },
+
     async testConnection() {
+        if (mode === 'mongodb') {
+            try {
+                const userCount = await mongoModels.User.countDocuments();
+                console.log(`✅ [Database Status] Connected via MongoDB Mongoose (Users Count: ${userCount})`);
+                return { connected: true, mode: 'mongodb', message: 'Connected to MongoDB', userCount };
+            } catch (err) {
+                console.error(`❌ [Database Exception] MongoDB: ${err.message}`);
+                return { connected: false, mode: 'mongodb', error: err.message };
+            }
+        }
+
         try {
             const t = getTables();
             const res = await drizzleDb.select({ count: count() }).from(t.users);

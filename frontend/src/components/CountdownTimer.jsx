@@ -34,8 +34,8 @@ export const CountdownTimer = ({ targetDate, startTime = '00:00:00' }) => {
 
   if (timeLeft.isLive) {
     return (
-      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white text-black font-bold text-sm tracking-wider animate-pulse">
-        <span className="w-2.5 h-2.5 rounded-full bg-black animate-ping"></span>
+      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#DAF1DE] text-[#051F20] font-bold text-sm tracking-wider animate-pulse shadow-md">
+        <span className="w-2.5 h-2.5 rounded-full bg-[#051F20] animate-ping"></span>
         ⚡ EVENT IS LIVE NOW
       </div>
     );
@@ -45,25 +45,25 @@ export const CountdownTimer = ({ targetDate, startTime = '00:00:00' }) => {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-1.5 text-zinc-400 text-xs uppercase tracking-widest font-semibold">
-        <Clock className="w-3.5 h-3.5 text-white" /> Event Starts In
+      <div className="flex items-center gap-1.5 text-[#8EB69B] text-xs uppercase tracking-widest font-semibold">
+        <Clock className="w-3.5 h-3.5 text-[#DAF1DE]" /> Event Starts In
       </div>
       <div className="grid grid-cols-4 gap-2 text-center">
-        <div className="bg-black border border-zinc-800 rounded-xl p-2.5">
-          <span className="block text-2xl font-black font-mono text-white">{formatTwo(timeLeft.days)}</span>
-          <span className="text-[10px] uppercase font-bold text-zinc-400">Days</span>
+        <div className="bg-[#051F20] border border-[#163832] rounded-xl p-2.5 shadow-sm">
+          <span className="block text-2xl font-black font-mono text-[#DAF1DE]">{formatTwo(timeLeft.days)}</span>
+          <span className="text-[10px] uppercase font-bold text-[#8EB69B]">Days</span>
         </div>
-        <div className="bg-black border border-zinc-800 rounded-xl p-2.5">
-          <span className="block text-2xl font-black font-mono text-white">{formatTwo(timeLeft.hours)}</span>
-          <span className="text-[10px] uppercase font-bold text-zinc-400">Hours</span>
+        <div className="bg-[#051F20] border border-[#163832] rounded-xl p-2.5 shadow-sm">
+          <span className="block text-2xl font-black font-mono text-[#DAF1DE]">{formatTwo(timeLeft.hours)}</span>
+          <span className="text-[10px] uppercase font-bold text-[#8EB69B]">Hours</span>
         </div>
-        <div className="bg-black border border-zinc-800 rounded-xl p-2.5">
-          <span className="block text-2xl font-black font-mono text-white">{formatTwo(timeLeft.minutes)}</span>
-          <span className="text-[10px] uppercase font-bold text-zinc-400">Mins</span>
+        <div className="bg-[#051F20] border border-[#163832] rounded-xl p-2.5 shadow-sm">
+          <span className="block text-2xl font-black font-mono text-[#DAF1DE]">{formatTwo(timeLeft.minutes)}</span>
+          <span className="text-[10px] uppercase font-bold text-[#8EB69B]">Mins</span>
         </div>
-        <div className="bg-black border border-zinc-800 rounded-xl p-2.5">
-          <span className="block text-2xl font-black font-mono text-white">{formatTwo(timeLeft.seconds)}</span>
-          <span className="text-[10px] uppercase font-bold text-zinc-400">Secs</span>
+        <div className="bg-[#051F20] border border-[#163832] rounded-xl p-2.5 shadow-sm">
+          <span className="block text-2xl font-black font-mono text-[#DAF1DE]">{formatTwo(timeLeft.seconds)}</span>
+          <span className="text-[10px] uppercase font-bold text-[#8EB69B]">Secs</span>
         </div>
       </div>
     </div>

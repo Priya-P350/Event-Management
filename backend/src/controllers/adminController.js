@@ -2,6 +2,8 @@ const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const dbQuery = require("../config/db");
 const { convertToCSV } = require("../utils/csvExport");
+const { generateMemberToken } = require('../utils/ticketToken');
+const { generateQRCodeDataUrl } = require('../services/qrService');
 
 async function getDashboardStats(req, res, next) {
   try {
@@ -39,13 +41,27 @@ async function createUser(req, res, next) {
     const validRoles = ['guest', 'scanner_staff', 'event_admin', 'super_admin'];
     const userRole = role && validRoles.includes(role) ? role : 'guest';
 
+    // Generate unique Member ID, secure token, and QR code
+    const { memberId, secureToken, qrPayload } = generateMemberToken({
+      name,
+      email,
+      phone: phone || '',
+      role: userRole
+    });
+    const qrCodeDataUrl = await generateQRCodeDataUrl(qrPayload);
+
     const newUser = {
       id: uuidv4(),
       name,
       email: email.toLowerCase(),
       phone: phone || '',
       password_hash,
-      role: userRole
+      role: userRole,
+      member_id: memberId,
+      memberId: memberId,
+      qr_token: secureToken,
+      qr_code_data: qrCodeDataUrl,
+      qr_status: 'active'
     };
 
     await dbQuery.createUser(newUser);
@@ -58,12 +74,51 @@ async function createUser(req, res, next) {
         name: newUser.name,
         email: newUser.email,
         phone: newUser.phone,
-        role: newUser.role
+        role: newUser.role,
+        member_id: memberId,
+        memberId: memberId,
+        qr_status: 'active',
+        qr_code_data: qrCodeDataUrl
       }
     });
   } catch (err) {
     next(err);
   }
+}
+
+async function resetMemberQr(req, res, next) {
+  try {
+    const { id } = req.params;
+    const user = await dbQuery.findUserById(id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    const { memberId, secureToken, qrPayload } = generateMemberToken(user);
+    const qrCodeDataUrl = await generateQRCodeDataUrl(qrPayload);
+
+    await dbQuery.updateUserMemberPass(user.id, {
+      member_id: memberId,
+      qr_token: secureToken,
+      qr_code_data: qrCodeDataUrl,
+      qr_status: 'active'
+    });
+
+    res.json({
+      success: true,
+      message: `QR Pass reactivated successfully for ${user.name}.`,
+      user: {
+        ...user,
+        member_id: memberId,
+        memberId: memberId,
+        qr_status: 'active',
+        qr_code_data: qrCodeDataUrl
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+}
 }
 
 async function updateUserRole(req, res, next) {
@@ -214,4 +269,5 @@ module.exports = {
   exportRegistrationsCSV,
   exportPaymentsCSV,
   initiateRefund,
+  resetMemberQr,
 };

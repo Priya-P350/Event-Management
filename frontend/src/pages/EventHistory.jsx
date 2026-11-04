@@ -58,7 +58,7 @@ export const EventHistory = () => {
                   </div>
 
                   <div className="flex items-start gap-4">
-                    <img src={evt.cover_image_url} alt={evt.title} className="w-20 h-20 rounded-2xl object-cover shrink-0 grayscale" />
+                    <img src={evt.cover_image_url} alt={evt.title} className="w-20 h-20 rounded-2xl object-cover shrink-0 border border-white/20 shadow-md" />
                     <div>
                       <h3 className="text-lg font-bold text-white line-clamp-1">{evt.title}</h3>
                       <div className="text-xs text-zinc-400 space-y-1 mt-1">
