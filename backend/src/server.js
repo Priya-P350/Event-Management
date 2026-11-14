@@ -1,4 +1,8 @@
+const path = require('path');
+// Ensure .env is always loaded regardless of execution working directory
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -64,14 +68,45 @@ app.use('/api/qr', qrRoutes);
 // Global Error Handler
 app.use(errorHandler);
 
-if (process.env.NODE_ENV !== 'test') {
-    app.listen(PORT, async () => {
+function listenOnPort(port, retries = 2) {
+    const server = app.listen(port, async () => {
         console.log(`======================================================`);
-        console.log(`🚀 QR Event Management API Server running on port ${PORT}`);
-        console.log(`🔗 Health Check: http://localhost:${PORT}/api/health`);
+        console.log(`🚀 QR Event Management API Server running on port ${port}`);
+        console.log(`🔗 Health Check: http://localhost:${port}/api/health`);
         console.log(`======================================================`);
         await dbQuery.testConnection();
     });
+
+    server.on('error', (err) => {
+        if (err.code === 'EADDRINUSE' && retries > 0) {
+            console.warn(`[Server] Port ${port} is occupied. Attempting to free port ${port} (retries left: ${retries})...`);
+            try {
+                const { execSync } = require('child_process');
+                if (process.platform === 'win32') {
+                    execSync(`powershell -NoProfile -NonInteractive -Command "Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -ne ${process.pid} } | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"`, { stdio: 'ignore' });
+                } else {
+                    execSync(`fuser -k ${port}/tcp 2>/dev/null || true`, { stdio: 'ignore' });
+                }
+            } catch (clearErr) {
+                // Ignore clearing errors and try retry
+            }
+            setTimeout(() => {
+                listenOnPort(port, retries - 1);
+            }, 1200);
+        } else if (err.code === 'EADDRINUSE') {
+            console.error(`❌ Port ${port} is currently in use. The backend is already active on http://localhost:${port}`);
+            process.exit(1);
+        } else {
+            console.error('[Server Error]', err);
+            process.exit(1);
+        }
+    });
+
+    return server;
+}
+
+if (process.env.NODE_ENV !== 'test') {
+    listenOnPort(PORT);
 }
 
 module.exports = app;
