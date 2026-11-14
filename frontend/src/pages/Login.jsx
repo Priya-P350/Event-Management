@@ -158,19 +158,6 @@ export const Login = () => {
                 <UserPlus className="w-3.5 h-3.5" /> Create New Account
               </Link>
             </p>
-
-            {/* Optional Collapsed Developer Reference */}
-            <details className="text-[11px] text-zinc-500 cursor-pointer pt-2 border-t border-[#1E394E]/40 group">
-              <summary className="hover:text-[#95B8C9] transition-colors select-none text-[10px] tracking-wide uppercase font-mono">
-                Development Reference: System Accounts
-              </summary>
-              <div className="mt-2 text-[10px] text-[#95B8C9] bg-[#0B1928]/80 p-3 rounded-xl border border-[#1E394E] space-y-1 font-mono">
-                <div>• <span className="text-white font-bold">Organizer:</span> organizer@eventhub.com / Admin@123</div>
-                <div>• <span className="text-white font-bold">Super Admin:</span> admin@eventhub.com / Admin@123</div>
-                <div>• <span className="text-white font-bold">Gate Staff:</span> staff@eventhub.com / Staff@123</div>
-                <div>• <span className="text-white font-bold">Attendee:</span> guest@gmail.com / Guest@123</div>
-              </div>
-            </details>
           </div>
         </div>
 

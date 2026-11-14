@@ -248,27 +248,13 @@ function initSqliteTables(db) {
         db.prepare("UPDATE users SET admin_id = 'ADM-0002' WHERE id = '22222222-2222-2222-2222-222222222222' AND (admin_id IS NULL OR admin_id = '')").run();
     } catch (e) {}
 
-    const userCount = db.prepare('SELECT count(*) as count FROM users').get();
-    if (userCount.count === 0) {
+    const eventCount = db.prepare('SELECT count(*) as count FROM events').get();
+    if (eventCount.count === 0) {
         seedSqliteData(db);
     }
 }
 
 function seedSqliteData(db) {
-    const passwordHash = bcrypt.hashSync('Admin@123', 10);
-    const guestHash = bcrypt.hashSync('Guest@123', 10);
-    const staffHash = bcrypt.hashSync('Staff@123', 10);
-
-    const insertUser = db.prepare(`
-        INSERT INTO users (id, name, email, phone, password_hash, role, admin_id) VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    insertUser.run('11111111-1111-1111-1111-111111111111', 'Global Super Admin', 'admin@eventhub.com', '+91 9876543210', passwordHash, 'super_admin', 'ADM-0001');
-    insertUser.run('22222222-2222-2222-2222-222222222222', 'Event Organizer Admin', 'organizer@eventhub.com', '+91 9876543211', passwordHash, 'event_admin', 'ADM-0002');
-    insertUser.run('33333333-3333-3333-3333-333333333333', 'Scanner Gate Staff', 'staff@eventhub.com', '+91 9876543212', staffHash, 'scanner_staff', null);
-    insertUser.run('44444444-4444-4444-4444-444444444444', 'Rahul Sharma', 'guest@gmail.com', '+91 9876543213', guestHash, 'guest', null);
-    insertUser.run('55555555-5555-5555-5555-555555555555', 'Priya Patel', 'priya@gmail.com', '+91 9876543214', guestHash, 'guest', null);
-
     const insertEvent = db.prepare(`
         INSERT INTO events (id, title, description, category, cover_image_url, event_date, start_time, end_time, venue, address, google_maps_url, ticket_price, capacity, registration_open_at, registration_close_at, status, created_by)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

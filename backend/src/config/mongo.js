@@ -38,26 +38,10 @@ async function connectMongo() {
 
 async function seedMongoIfEmpty() {
     try {
-        const userCount = await models.User.countDocuments();
-        if (userCount > 0) return;
+        const eventCount = await models.Event.countDocuments();
+        if (eventCount > 0) return;
 
         console.log('[MongoDB] Fresh database detected. Seeding initial event data into MongoDB...');
-
-        const passwordHash = await bcrypt.hash('Admin@123', 10);
-        const guestHash = await bcrypt.hash('Guest@123', 10);
-        const staffHash = await bcrypt.hash('Staff@123', 10);
-
-        // Seed Users
-        const users = [
-            { _id: '11111111-1111-1111-1111-111111111111', name: 'Global Super Admin', email: 'admin@eventhub.com', phone: '+91 9876543210', password_hash: passwordHash, role: 'super_admin' },
-            { _id: '22222222-2222-2222-2222-222222222222', name: 'Event Organizer Admin', email: 'organizer@eventhub.com', phone: '+91 9876543211', password_hash: passwordHash, role: 'event_admin' },
-            { _id: '33333333-3333-3333-3333-333333333333', name: 'Scanner Gate Staff', email: 'staff@eventhub.com', phone: '+91 9876543212', password_hash: staffHash, role: 'scanner_staff' },
-            { _id: '44444444-4444-4444-4444-444444444444', name: 'Rahul Sharma', email: 'guest@gmail.com', phone: '+91 9876543213', password_hash: guestHash, role: 'guest' }
-        ];
-
-        for (const u of users) {
-            await models.User.findOneAndUpdate({ email: u.email }, u, { upsert: true, returnDocument: 'after' });
-        }
 
         // Seed Events
         const events = [
