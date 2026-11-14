@@ -20,8 +20,8 @@ export const AdminDashboard = () => {
 
   if (loading) {
     return (
-      <div className="py-20 text-center text-[#DAF1DE]">
-        <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-[#DAF1DE]" />
+      <div className="py-20 text-center text-[#e0f2fe]">
+        <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-[#e0f2fe]" />
         <span className="text-xs font-semibold">Loading Admin Dashboard Analytics...</span>
       </div>
     );

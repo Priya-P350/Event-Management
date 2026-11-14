@@ -1,5 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 
+/**
+ * Sleek Minimalist Dot & Ring Cursor
+ * - Immediate high-precision oceanic cyan core dot
+ * - Silky smooth trailing outer follower ring with elegant expansion on interactive hover
+ * - Zero clunky tick marks or crosshair clutter
+ */
 export const CustomCursor = () => {
   const [position, setPosition] = useState({ x: -100, y: -100 });
   const [followerPos, setFollowerPos] = useState({ x: -100, y: -100 });
@@ -7,11 +13,14 @@ export const CustomCursor = () => {
   const [isMouseDown, setIsMouseDown] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const requestRef = useRef();
+  const prefersReducedMotion = useRef(false);
 
   useEffect(() => {
-    // Check if device supports fine pointer (mouse)
+    // Check if device supports fine pointer (mouse / trackpad)
     const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     if (isTouchDevice) return;
+
+    prefersReducedMotion.current = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     const onMouseMove = (e) => {
       setPosition({ x: e.clientX, y: e.clientY });
@@ -28,7 +37,9 @@ export const CustomCursor = () => {
         target.closest('button') ||
         target.closest('a') ||
         target.getAttribute('role') === 'button' ||
-        target.classList.contains('interactive')
+        target.classList.contains('cursor-pointer') ||
+        target.classList.contains('interactive') ||
+        target.closest('.interactive')
       );
 
       setIsHovered(!!isInteractive);
@@ -54,15 +65,18 @@ export const CustomCursor = () => {
     };
   }, [isVisible]);
 
-  // Smooth trailing follower animation (Lerp physics)
+  // Smooth lerp physics for outer follower ring
   useEffect(() => {
     const animateFollower = () => {
       setFollowerPos((prev) => {
+        if (prefersReducedMotion.current) {
+          return { x: position.x, y: position.y };
+        }
         const dx = position.x - prev.x;
         const dy = position.y - prev.y;
         return {
-          x: prev.x + dx * 0.22,
-          y: prev.y + dy * 0.22
+          x: prev.x + dx * 0.18,
+          y: prev.y + dy * 0.18
         };
       });
       requestRef.current = requestAnimationFrame(animateFollower);
@@ -75,42 +89,43 @@ export const CustomCursor = () => {
   if (!isVisible) return null;
 
   return (
-    <div className="fixed inset-0 pointer-events-none z-[9999] overflow-hidden">
-      {/* Precision Core Dot */}
+    <div className="fixed inset-0 pointer-events-none z-[99999] overflow-hidden">
+      {/* Precision Core Dot (Zero Latency) */}
       <div
-        className={`fixed top-0 left-0 w-2 h-2 rounded-full bg-white transition-transform duration-75 ease-out -translate-x-1/2 -translate-y-1/2 ${
-          isMouseDown ? 'scale-150 bg-zinc-300' : isHovered ? 'scale-0' : 'scale-100'
-        }`}
+        className="fixed top-0 left-0 -translate-x-1/2 -translate-y-1/2 pointer-events-none transition-transform duration-100 ease-out will-change-transform"
         style={{
           transform: `translate3d(${position.x}px, ${position.y}px, 0) translate(-50%, -50%) scale(${
-            isHovered ? 0 : isMouseDown ? 1.5 : 1
+            isMouseDown ? 0.75 : isHovered ? 1.4 : 1
           })`
         }}
-      />
+      >
+        <div
+          className={`rounded-full transition-colors duration-200 ${
+            isHovered
+              ? 'w-2.5 h-2.5 bg-[#38bdf8] shadow-[0_0_12px_#38bdf8]'
+              : isMouseDown
+              ? 'w-2 h-2 bg-white shadow-[0_0_8px_#ffffff]'
+              : 'w-2 h-2 bg-[#E5F4F9] shadow-[0_0_8px_rgba(74,150,186,0.9)]'
+          }`}
+        />
+      </div>
 
-      {/* Patterned Outer Target Ring with Crosshairs */}
+      {/* Smooth Oceanic Follower Ring */}
       <div
-        className={`fixed top-0 left-0 transition-all duration-200 ease-out -translate-x-1/2 -translate-y-1/2 flex items-center justify-center ${
-          isHovered
-            ? 'w-12 h-12 rounded-full border-2 border-white bg-white/10'
-            : isMouseDown
-            ? 'w-7 h-7 rounded-full border border-zinc-400 bg-white/20'
-            : 'w-9 h-9 rounded-full border border-white/60 bg-transparent'
-        }`}
+        className="fixed top-0 left-0 -translate-x-1/2 -translate-y-1/2 pointer-events-none will-change-transform flex items-center justify-center transition-all duration-300 ease-out"
         style={{
           transform: `translate3d(${followerPos.x}px, ${followerPos.y}px, 0) translate(-50%, -50%)`
         }}
       >
-        {/* Crosshair Pattern Marks */}
-        <div className="absolute -top-1.5 w-0.5 h-1.5 bg-white/80" />
-        <div className="absolute -bottom-1.5 w-0.5 h-1.5 bg-white/80" />
-        <div className="absolute -left-1.5 h-0.5 w-1.5 bg-white/80" />
-        <div className="absolute -right-1.5 h-0.5 w-1.5 bg-white/80" />
-
-        {/* Center Target Box on Hover */}
-        {isHovered && (
-          <div className="w-1.5 h-1.5 bg-white rotate-45 transition-transform animate-pulse" />
-        )}
+        <div
+          className={`rounded-full transition-all duration-300 ease-out ${
+            isHovered
+              ? 'w-14 h-14 border border-[#E5F4F9]/80 bg-[#4A96BA]/15 backdrop-blur-[1px] shadow-[0_0_20px_rgba(56,189,248,0.25)]'
+              : isMouseDown
+              ? 'w-6 h-6 border-2 border-[#38bdf8] bg-[#38bdf8]/20'
+              : 'w-8 h-8 border border-[#4A96BA]/60 bg-[#4A96BA]/5'
+          }`}
+        />
       </div>
     </div>
   );

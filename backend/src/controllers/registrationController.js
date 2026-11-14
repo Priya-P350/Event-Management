@@ -100,12 +100,20 @@ async function createRegistration(req, res, next) {
             const { generateQRCodeDataUrl } = require('../services/qrService');
             const { sendQRTicketEmail } = require('../services/emailService');
 
-            const { secureToken, ticketNumber, qrPayload } = generateTicketToken({
+            const { secureToken, ticketNumber, verificationString, qrPayload } = generateTicketToken({
                 guestName: name,
                 guestEmail: email,
                 guestPhone: phone,
+                registrationNumber,
+                registrationId: regId,
+                userId: effectiveUserId,
                 eventTitle: event.title,
-                eventId: eventId
+                eventId: eventId,
+                eventDate: event.event_date,
+                startTime: event.start_time,
+                venue: event.venue,
+                address: event.address,
+                customAnswers: customAnswers || {}
             });
             const qrCodeDataUrl = await generateQRCodeDataUrl(qrPayload);
 
@@ -122,10 +130,12 @@ async function createRegistration(req, res, next) {
 
             const createdTicket = await dbQuery.createTicket(ticketData);
 
-            // Send QR pass email
+            // Send QR pass email via Resend
             sendQRTicketEmail({
                 guestEmail: email.toLowerCase(),
                 guestName: name,
+                guestPhone: phone,
+                registrationNumber,
                 eventTitle: event.title,
                 eventDate: event.event_date,
                 startTime: event.start_time,
@@ -133,7 +143,9 @@ async function createRegistration(req, res, next) {
                 address: event.address,
                 ticketNumber,
                 secureToken,
-                qrCodeDataUrl
+                verificationString,
+                qrCodeDataUrl,
+                customAnswers: customAnswers || {}
             }).catch(err => console.error('[Free Registration Email Error]', err));
 
             return res.status(201).json({
@@ -142,9 +154,12 @@ async function createRegistration(req, res, next) {
                 message: 'Registration successful! Your free QR ticket has been generated and emailed to you.',
                 registrationId: regId,
                 registrationNumber,
+                registration: { id: regId, registration_number: registrationNumber, registrationNumber },
                 ticket: createdTicket,
                 ticketNumber,
-                secureToken
+                secureToken,
+                verificationString,
+                qrCodeDataUrl
             });
         }
 
@@ -211,6 +226,29 @@ async function getRegistrationById(req, res, next) {
         if (!registration) {
             return res.status(404).json({ success: false, message: 'Registration not found.' });
         }
+
+        if (!req.user) {
+            return res.status(401).json({
+                success: false,
+                message: 'Authentication required to view registration details.'
+            });
+        }
+
+        const isSuperAdmin = req.user.role === 'super_admin';
+        const isRegisteredGuest = (registration.user_id && req.user.id === registration.user_id) || 
+                                  (req.user.email && registration.guest_email && req.user.email.toLowerCase() === registration.guest_email.toLowerCase());
+        const isEventCreator = registration.event && (
+            registration.event.created_by === req.user.id ||
+            registration.event.createdBy === req.user.id
+        );
+
+        if (!isSuperAdmin && !isRegisteredGuest && !isEventCreator) {
+            return res.status(403).json({
+                success: false,
+                message: 'Forbidden. You do not have permission to view this registration.'
+            });
+        }
+
         res.json({ success: true, registration });
     } catch (err) {
         next(err);

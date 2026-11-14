@@ -12,7 +12,7 @@ const userSchema = new mongoose.Schema({
         default: 'guest' 
     },
     admin_id: { type: String, sparse: true, index: true, unique: true },
-    member_id: { type: String, sparse: true, index: true },
+    member_id: { type: String, sparse: true, index: true, unique: true },
     qr_code_data: { type: String, default: '' },
     qr_token: { type: String, sparse: true, index: true },
     qr_status: { 

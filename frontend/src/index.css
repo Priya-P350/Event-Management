@@ -2,129 +2,208 @@
 @tailwind components;
 @tailwind utilities;
 
-/* STRICT RULE: REMOVE ALL BOX SHADOWS ACROSS THE ENTIRE SITE */
-*, ::before, ::after {
-  box-shadow: none !important;
-  -webkit-box-shadow: none !important;
+/* Sleek Custom Cursor Pointer Defaults */
+@media (pointer: fine) {
+  html, body, button, a, [role="button"], .cursor-pointer {
+    cursor: none !important;
+  }
 }
 
 :root {
-  /* Exact image color palette tokens */
-  --oceanic-950: #0B1928;
-  --oceanic-900: #122538;
-  --oceanic-800: #1E394E;
-  --oceanic-700: #2B4E66;
-  --oceanic-600: #304E61;
-  --oceanic-500: #38708C;
-  --oceanic-400: #4A96BA;
-  --oceanic-300: #95B8C9;
-  --oceanic-100: #E5F4F9;
-
-  /* Backward compatible tokens */
-  --forest-950: #0B1928;
-  --forest-900: #122538;
-  --forest-800: #1E394E;
-  --forest-700: #2B4E66;
-  --forest-300: #95B8C9;
-  --forest-100: #E5F4F9;
+  /* Bioluminescent Deep Ocean Color Tokens */
+  --ocean-abyss: #020817;
+  --ocean-depth: #041124;
+  --ocean-glass: rgba(4, 17, 36, 0.78);
+  --ocean-card: rgba(7, 26, 52, 0.65);
+  --ocean-border: rgba(56, 189, 248, 0.22);
+  --ocean-border-glow: rgba(56, 189, 248, 0.55);
+  --aqua-glow: #00f2fe;
+  --cyan-bright: #38bdf8;
+  --cyan-deep: #0284c7;
+  --seafoam: #2dd4bf;
+  --pearl-white: #f0fdfa;
+  --ice-foam: #e0f2fe;
+  --ocean-subtext: #94b8d6;
 }
 
 @layer base {
   body {
-    @apply text-[#E5F4F9] antialiased font-sans min-h-screen overflow-x-hidden selection:bg-[#4A96BA] selection:text-[#0B1928];
-    background-color: #0B1928;
+    @apply text-[#e0f2fe] antialiased font-sans min-h-screen overflow-x-hidden selection:bg-[#38bdf8] selection:text-[#020817];
+    background-color: #020817;
     background-image: 
-      radial-gradient(at 0% 0%, rgba(74, 150, 186, 0.18) 0px, transparent 50%),
-      radial-gradient(at 100% 0%, rgba(31, 46, 74, 0.35) 0px, transparent 55%),
-      radial-gradient(at 50% 100%, rgba(18, 37, 56, 0.9) 0px, transparent 65%),
-      linear-gradient(to right, rgba(149, 184, 201, 0.03) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(149, 184, 201, 0.03) 1px, transparent 1px),
-      url('/assets/texture-oceanic.png');
-    background-size: 100% 100%, 100% 100%, 100% 100%, 40px 40px, 40px 40px, 480px auto;
-    background-blend-mode: normal, normal, normal, normal, normal, overlay;
-    background-repeat: no-repeat, no-repeat, no-repeat, repeat, repeat, repeat;
+      /* Surface sunlight caustic flare from above */
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(56, 189, 248, 0.22) 0%, transparent 70%),
+      /* Mid-ocean depth glow */
+      radial-gradient(circle 900px at 15% 20%, rgba(6, 182, 212, 0.14) 0%, transparent 60%),
+      radial-gradient(circle 800px at 85% 60%, rgba(14, 165, 233, 0.12) 0%, transparent 65%),
+      /* Deep marine trench gradient */
+      linear-gradient(180deg, #030d1d 0%, #041124 35%, #020817 100%),
+      /* Subtle water mesh grid */
+      linear-gradient(to right, rgba(56, 189, 248, 0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(56, 189, 248, 0.03) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 48px 48px, 48px 48px;
+    background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat, repeat;
     background-attachment: fixed;
   }
 }
 
-/* Oceanic Textured Glass Panels */
+/* Underwater Bioluminescent Floating Bubbles */
+.ocean-bubble-track {
+  position: absolute;
+  bottom: -60px;
+  animation: ocean-bubble-rise linear infinite;
+  will-change: transform;
+  pointer-events: none;
+}
+
+.ocean-bubble-sphere {
+  border-radius: 9999px;
+  background: radial-gradient(circle at 30% 30%, rgba(240, 253, 250, 0.75) 0%, rgba(56, 189, 248, 0.35) 45%, rgba(6, 182, 212, 0.1) 80%);
+  border: 1px solid rgba(125, 211, 252, 0.55);
+  box-shadow: inset 0 0 8px rgba(56, 189, 248, 0.5), 0 0 10px rgba(6, 182, 212, 0.35);
+  animation: ocean-bubble-sway ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@keyframes ocean-bubble-rise {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(-115vh);
+    opacity: 0;
+  }
+}
+
+@keyframes ocean-bubble-sway {
+  0% {
+    transform: translateX(-16px) scale(0.95);
+  }
+  50% {
+    transform: translateX(16px) scale(1.05);
+  }
+  100% {
+    transform: translateX(-16px) scale(0.95);
+  }
+}
+
+/* Oceanic Frosted Glass Panels */
 .glass-panel {
-  background: rgba(18, 37, 56, 0.88);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(149, 184, 201, 0.22);
+  background: rgba(4, 17, 36, 0.82);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  box-shadow: 0 10px 30px -5px rgba(2, 8, 23, 0.6), inset 0 1px 0 rgba(224, 242, 254, 0.08);
 }
 
 .glass-card {
-  background: rgba(30, 57, 78, 0.72);
+  background: rgba(7, 26, 52, 0.65);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(149, 184, 201, 0.25);
+  border: 1px solid rgba(56, 189, 248, 0.2);
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .glass-card:hover {
-  border-color: rgba(229, 244, 249, 0.6);
-  background: rgba(30, 57, 78, 0.9);
+  border-color: rgba(56, 189, 248, 0.55);
+  background: rgba(10, 35, 66, 0.85);
   transform: translateY(-2px);
+  box-shadow: 0 12px 30px -5px rgba(0, 242, 254, 0.15);
 }
 
-/* Texture Canvas Showcase & Banner Utilities */
+/* Ocean Texture Banners & Cards */
 .texture-banner {
   background-image: 
-    linear-gradient(135deg, rgba(11, 25, 40, 0.92) 0%, rgba(18, 37, 56, 0.78) 50%, rgba(48, 78, 97, 0.85) 100%),
+    radial-gradient(circle at 10% 50%, rgba(56, 189, 248, 0.18), transparent 60%),
+    linear-gradient(135deg, rgba(2, 8, 23, 0.95) 0%, rgba(4, 19, 39, 0.85) 50%, rgba(8, 38, 70, 0.9) 100%),
     url('/assets/texture-oceanic.png');
-  background-size: cover, 360px auto;
-  background-blend-mode: normal, overlay;
-  background-repeat: no-repeat, repeat;
+  background-size: 100% 100%, cover, 360px auto;
+  background-blend-mode: normal, normal, overlay;
+  background-repeat: no-repeat, no-repeat, repeat;
 }
 
 .texture-card {
   background-image: 
-    linear-gradient(180deg, rgba(18, 37, 56, 0.92) 0%, rgba(11, 25, 40, 0.96) 100%),
+    linear-gradient(180deg, rgba(6, 24, 48, 0.92) 0%, rgba(2, 8, 23, 0.96) 100%),
     url('/assets/texture-oceanic.png');
   background-size: cover, 320px auto;
   background-blend-mode: normal, overlay;
   background-repeat: no-repeat, repeat;
-  border: 1px solid rgba(149, 184, 201, 0.25);
+  border: 1px solid rgba(56, 189, 248, 0.22);
 }
 
 .texture-pass {
   background-image: 
-    radial-gradient(circle at top right, rgba(74, 150, 186, 0.25), transparent 70%),
-    linear-gradient(180deg, #122538 0%, #0B1928 100%),
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.3), transparent 70%),
+    linear-gradient(180deg, #061e38 0%, #020817 100%),
     url('/assets/texture-oceanic.png');
   background-blend-mode: screen, normal, overlay;
   background-size: 100% 100%, 100% 100%, 300px auto;
   background-repeat: no-repeat, no-repeat, repeat;
 }
 
-/* Black / Deep Obsidian Box Utility with Crisp Contrast */
+/* Deep Ocean UI Elements */
 .black-box {
-  background-color: rgba(11, 25, 40, 0.96);
-  color: #E5F4F9;
-  border: 1px solid rgba(149, 184, 201, 0.25);
+  background-color: rgba(3, 12, 26, 0.95);
+  color: #e0f2fe;
+  border: 1px solid rgba(56, 189, 248, 0.25);
 }
 
-/* High Contrast Oceanic UI Elements */
-.forest-badge, .ocean-badge {
-  background-color: rgba(43, 78, 102, 0.5);
-  color: #E5F4F9;
-  border: 1px solid rgba(149, 184, 201, 0.35);
+.ocean-badge, .forest-badge {
+  background-color: rgba(6, 28, 54, 0.7);
+  color: #7dd3fc;
+  border: 1px solid rgba(56, 189, 248, 0.35);
 }
 
-.forest-input, .ocean-input {
-  background-color: #0B1928;
-  color: #E5F4F9;
-  border: 1px solid #1E394E;
+.ocean-input, .forest-input {
+  background-color: #041124;
+  color: #e0f2fe;
+  border: 1px solid #0c2c52;
 }
 
-.forest-input:focus, .ocean-input:focus {
-  border-color: #4A96BA;
+.ocean-input:focus, .forest-input:focus {
+  border-color: #38bdf8;
   outline: none;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
 }
 
-/* Slate / Oceanic Animations */
+/* Oceanic Bioluminescent Primary Button */
+.ocean-btn-primary {
+  background: linear-gradient(135deg, #00f2fe 0%, #0284c7 100%);
+  color: #020817;
+  font-weight: 800;
+  border: 1px solid #38bdf8;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ocean-btn-primary:hover {
+  background: linear-gradient(135deg, #38bdf8 0%, #00f2fe 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 0 20px rgba(0, 242, 254, 0.45);
+}
+
+/* Oceanic Secondary Glass Button */
+.ocean-btn-secondary {
+  background: rgba(6, 182, 212, 0.12);
+  color: #e0f2fe;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  transition: all 0.25s ease;
+}
+
+.ocean-btn-secondary:hover {
+  background: rgba(6, 182, 212, 0.24);
+  border-color: rgba(56, 189, 248, 0.6);
+  color: #ffffff;
+}
+
+/* Ocean Animations */
 @keyframes float-subtle {
   0%, 100% {
     transform: translateY(0px);
@@ -145,10 +224,11 @@
 
 @keyframes pulse-ocean-border {
   0%, 100% {
-    border-color: rgba(149, 184, 201, 0.25);
+    border-color: rgba(56, 189, 248, 0.25);
   }
   50% {
-    border-color: rgba(229, 244, 249, 0.85);
+    border-color: rgba(0, 242, 254, 0.75);
+    box-shadow: 0 0 15px rgba(0, 242, 254, 0.25);
   }
 }
 
@@ -157,7 +237,7 @@
 }
 
 .animate-shimmer-slate {
-  background: linear-gradient(90deg, rgba(229,244,249,0) 0%, rgba(229,244,249,0.15) 50%, rgba(229,244,249,0) 100%);
+  background: linear-gradient(90deg, rgba(224, 242, 254, 0) 0%, rgba(56, 189, 248, 0.2) 50%, rgba(224, 242, 254, 0) 100%);
   background-size: 200% 100%;
   animation: shimmer-ocean 3s infinite;
 }
@@ -166,22 +246,24 @@
   animation: pulse-ocean-border 2.5s infinite ease-in-out;
 }
 
-/* Custom Oceanic Scrollbar */
+/* Custom Deep Ocean Trench Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0B1928;
+  background: #020817;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1E394E;
-  border: 1px solid #2B4E66;
-  border-radius: 3px;
+  background: #0c2c52;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #4A96BA;
+  background: #0284c7;
+  border-color: #38bdf8;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
 }

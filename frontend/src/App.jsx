@@ -41,13 +41,15 @@ import { AdminPayments } from './pages/admin/AdminPayments';
 import { AdminAttendance } from './pages/admin/AdminAttendance';
 import { AdminGallery } from './pages/admin/AdminGallery';
 
-// Custom Cursor
+// Custom Cursor & Ambient Ocean
 import { CustomCursor } from './components/CustomCursor';
+import { OceanAmbient } from './components/OceanAmbient';
 
 export default function App() {
   return (
     <AuthProvider>
       <ToastProvider>
+        <OceanAmbient />
         <CustomCursor />
         <Routes>
           {/* Public Routes */}

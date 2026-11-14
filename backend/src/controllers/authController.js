@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const dbQuery = require('../config/db');
 const { jwtSecret } = require('../middleware/auth');
-const { generateMemberToken } = require('../utils/ticketToken');
+const { generateMemberToken, generateAdminId } = require('../utils/ticketToken');
 const { generateQRCodeDataUrl } = require('../services/qrService');
 const { sendMemberPassEmail } = require('../services/emailService');
 
@@ -21,18 +21,41 @@ async function register(req, res, next) {
         }
 
         const password_hash = await bcrypt.hash(password, 10);
-        const userRole = role && ['guest', 'scanner_staff', 'event_admin', 'super_admin'].includes(role) ? role : 'guest';
 
-        // Generate Unique Member ID, secure token, and QR Payload with details
-        const { memberId, secureToken, qrPayload } = generateMemberToken({
-            name,
-            email,
-            phone: phone || '',
-            role: userRole
-        });
+        // Server-side role mapping & authorization (prevent unauthorized super_admin escalation)
+        let userRole = 'guest';
+        if (role === 'organizer' || role === 'event_admin') {
+            userRole = 'event_admin';
+        } else if (role === 'gate_staff' || role === 'scanner_staff') {
+            userRole = 'scanner_staff';
+        } else if (role === 'attendee' || role === 'guest') {
+            userRole = 'guest';
+        }
 
-        // Generate QR code Data URL image
-        const qrCodeDataUrl = await generateQRCodeDataUrl(qrPayload);
+        const isAttendee = (userRole === 'guest');
+        const isOrganizer = ['event_admin', 'super_admin'].includes(userRole);
+        const isStaff = (userRole === 'scanner_staff');
+
+        let memberId = null;
+        let secureToken = null;
+        let verificationString = null;
+        let qrCodeDataUrl = null;
+
+        // ONLY generate QR pass for Attendees (Event Creators & Gate Staff do not get admission passes)
+        if (isAttendee) {
+            const memberTokenData = generateMemberToken({
+                name,
+                email,
+                phone: phone || '',
+                role: userRole
+            });
+            memberId = memberTokenData.memberId;
+            secureToken = memberTokenData.secureToken;
+            verificationString = memberTokenData.verificationString;
+            qrCodeDataUrl = await generateQRCodeDataUrl(memberTokenData.qrPayload);
+        }
+
+        const adminId = isOrganizer ? generateAdminId() : null;
 
         const newUser = {
             id: uuidv4(),
@@ -41,34 +64,48 @@ async function register(req, res, next) {
             phone: phone || '',
             password_hash,
             role: userRole,
+            admin_id: adminId,
+            adminId: adminId,
             member_id: memberId,
             memberId: memberId,
             qr_token: secureToken,
             qr_code_data: qrCodeDataUrl,
-            qr_status: 'active'
+            qr_status: isAttendee ? 'active' : null
         };
 
         const createdUser = await dbQuery.createUser(newUser);
 
-        // Send Member QR Pass email in background
-        sendMemberPassEmail({
-            email: newUser.email,
-            name: newUser.name,
-            memberId,
-            secureToken,
-            qrCodeDataUrl,
-            role: userRole
-        }).catch(err => console.error('[Member Pass Email Dispatch Error]', err.message));
+        // ONLY send Member QR Pass email to Attendees (dispatched directly to their registered email)
+        if (isAttendee && qrCodeDataUrl) {
+            sendMemberPassEmail({
+                email: newUser.email,
+                name: newUser.name,
+                memberId,
+                secureToken,
+                verificationString,
+                qrCodeDataUrl,
+                role: userRole
+            }).catch(err => console.error('[Member Pass Email Dispatch Error]', err.message));
+        }
 
         const token = jwt.sign(
-            { id: newUser.id, name: newUser.name, email: newUser.email, role: newUser.role },
+            { id: newUser.id, admin_id: adminId, name: newUser.name, email: newUser.email, role: newUser.role },
             jwtSecret,
             { expiresIn: '7d' }
         );
 
+        let successMessage = 'User registered successfully.';
+        if (isAttendee) {
+            successMessage = 'Registration successful! Your Member QR pass has been sent to your email and is displayed on screen.';
+        } else if (isOrganizer) {
+            successMessage = 'Organizer account created successfully! Welcome to the Event Creator console.';
+        } else if (isStaff) {
+            successMessage = 'Gate scanner staff account created successfully!';
+        }
+
         res.status(201).json({
             success: true,
-            message: 'User registered successfully. Member QR pass generated.',
+            message: successMessage,
             token,
             user: {
                 id: newUser.id,
@@ -76,11 +113,13 @@ async function register(req, res, next) {
                 email: newUser.email,
                 phone: newUser.phone,
                 role: newUser.role,
+                admin_id: adminId,
+                adminId: adminId,
                 member_id: memberId,
                 memberId: memberId,
                 qr_token: secureToken,
                 qr_code_data: qrCodeDataUrl,
-                qr_status: 'active'
+                qr_status: newUser.qr_status
             }
         });
     } catch (err) {
@@ -107,8 +146,8 @@ async function login(req, res, next) {
             return res.status(401).json({ success: false, message: 'Invalid password. Please try again.' });
         }
 
-        // Ensure user has member ID and QR pass generated
-        if (!user.member_id || !user.qr_code_data) {
+        // Ensure ONLY attendee guests have member ID and QR pass generated (organizers & staff do not get admission passes)
+        if (user.role === 'guest' && (!user.member_id || !user.qr_code_data)) {
             const { memberId, secureToken, qrPayload } = generateMemberToken(user);
             const qrCodeDataUrl = await generateQRCodeDataUrl(qrPayload);
             await dbQuery.updateUserMemberPass(user.id, {
@@ -124,8 +163,16 @@ async function login(req, res, next) {
             user.qr_status = user.qr_status || 'active';
         }
 
+        // Ensure admin has unique admin_id assigned
+        if (['event_admin', 'super_admin'].includes(user.role) && !user.admin_id) {
+            const assignedAdminId = user.role === 'super_admin' ? 'ADM-0001' : generateAdminId();
+            await dbQuery.updateUserAdminId(user.id, assignedAdminId);
+            user.admin_id = assignedAdminId;
+            user.adminId = assignedAdminId;
+        }
+
         const token = jwt.sign(
-            { id: user.id, name: user.name, email: user.email, role: user.role },
+            { id: user.id, admin_id: user.admin_id || user.adminId || null, name: user.name, email: user.email, role: user.role },
             jwtSecret,
             { expiresIn: '7d' }
         );
@@ -140,6 +187,8 @@ async function login(req, res, next) {
                 email: user.email,
                 phone: user.phone,
                 role: user.role,
+                admin_id: user.admin_id || user.adminId || null,
+                adminId: user.admin_id || user.adminId || null,
                 member_id: user.member_id || user.memberId,
                 memberId: user.member_id || user.memberId,
                 qr_code_data: user.qr_code_data,
@@ -178,10 +227,20 @@ async function getMe(req, res, next) {
             user.qr_status = user.qr_status || 'active';
         }
 
+        // Auto-generate admin_id for any admin missing one
+        if (['event_admin', 'super_admin'].includes(user.role) && !user.admin_id) {
+            const assignedAdminId = user.role === 'super_admin' ? 'ADM-0001' : generateAdminId();
+            await dbQuery.updateUserAdminId(user.id, assignedAdminId);
+            user.admin_id = assignedAdminId;
+            user.adminId = assignedAdminId;
+        }
+
         res.json({
             success: true,
             user: {
                 ...user,
+                admin_id: user.admin_id || user.adminId || null,
+                adminId: user.admin_id || user.adminId || null,
                 member_id: user.member_id || user.memberId,
                 memberId: user.member_id || user.memberId,
                 qr_code_data: user.qr_code_data,

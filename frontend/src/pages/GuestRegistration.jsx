@@ -83,7 +83,8 @@ export const GuestRegistration = () => {
             event,
             registrationId: regRes.registrationId,
             ticketNumber: regRes.ticketNumber || regRes.ticket?.ticket_number,
-            secureToken: regRes.secureToken || regRes.ticket?.secure_token
+            secureToken: regRes.secureToken || regRes.ticket?.secure_token,
+            verificationString: regRes.verificationString || regRes.ticket?.verificationString
           }
         });
         return;
@@ -129,7 +130,8 @@ export const GuestRegistration = () => {
                   event,
                   registrationId,
                   ticketNumber: verifyRes.ticketNumber,
-                  secureToken: verifyRes.secureToken
+                  secureToken: verifyRes.secureToken,
+                  verificationString: verifyRes.verificationString || verifyRes.ticket?.verificationString
                 }
               });
             } else {
@@ -171,7 +173,8 @@ export const GuestRegistration = () => {
                 event,
                 registrationId,
                 ticketNumber: verifyRes.ticketNumber,
-                secureToken: verifyRes.secureToken
+                secureToken: verifyRes.secureToken,
+                verificationString: verifyRes.verificationString || verifyRes.ticket?.verificationString
               }
             });
           } else {

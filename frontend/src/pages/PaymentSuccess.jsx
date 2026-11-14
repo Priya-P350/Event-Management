@@ -7,7 +7,10 @@ import { CheckCircle2, Ticket, Calendar, MapPin, Download, ArrowRight } from 'lu
 export const PaymentSuccess = () => {
   const location = useLocation();
   const state = location.state || {};
-  const { ticket, event, ticketNumber, secureToken } = state;
+  const { ticket, event, ticketNumber, secureToken, verificationString } = state;
+  const passId = ticketNumber || ticket?.ticket_number || 'EVT-2026-000101';
+  const token = secureToken || ticket?.secure_token || '';
+  const verifyStr = verificationString || ticket?.verificationString || `EVENTHUB-VERIFY:${passId}:${token}`;
 
   useEffect(() => {
     // Fire confetti celebration animation
@@ -19,7 +22,17 @@ export const PaymentSuccess = () => {
     });
   }, []);
 
-  const qrPayload = `EVENT-TICKET:${secureToken || ticket?.secure_token || 'EVT-TK-SAMPLE'}`;
+  const qrPayload = ticket?.qr_payload || (ticket ? JSON.stringify({
+    type: 'event_ticket',
+    uniqueId: passId,
+    ticketNumber: passId,
+    secureToken: token,
+    verificationString: verifyStr,
+    eventId: event?.id || ticket.event_id,
+    eventTitle: event?.title || ticket.event?.title,
+    eventDate: event?.event_date || ticket.event?.event_date,
+    venue: event?.venue || ticket.event?.venue
+  }) : `EVENTHUB-VERIFY:${passId}:${token}`);
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-12 space-y-8">
@@ -29,9 +42,9 @@ export const PaymentSuccess = () => {
         <div className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center mx-auto border border-white">
           <CheckCircle2 className="w-10 h-10" />
         </div>
-        <h1 className="text-3xl font-black text-white">Payment Verified & Ticket Issued!</h1>
+        <h1 className="text-3xl font-black text-white">Registration Verified & QR Pass Issued!</h1>
         <p className="text-xs text-zinc-400 max-w-md mx-auto">
-          Your registration is confirmed. We've dispatched your digital QR ticket pass to your email.
+          Your entry pass with all registration details has been generated and dispatched to your email address for scanning on the event date.
         </p>
       </div>
 
@@ -42,29 +55,44 @@ export const PaymentSuccess = () => {
           <div className="flex items-center gap-2 text-white font-extrabold text-sm tracking-wider">
             <Ticket className="w-5 h-5 text-white" /> EVENTHUB OFFICIAL PASS
           </div>
-          <span className="px-3 py-1 rounded-full bg-white text-black font-mono text-xs font-bold border border-white">
+          <span className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 font-mono text-xs font-bold border border-emerald-500/20">
             CONFIRMED
           </span>
         </div>
 
         {/* QR Code Container */}
         <div className="bg-black p-6 rounded-2xl border border-zinc-800 text-center space-y-4">
-          <div className="inline-block p-4 bg-white rounded-2xl border border-zinc-700">
-            <QRCodeCanvas
-              value={qrPayload}
-              size={180}
-              level="H"
-              includeMargin={false}
-            />
+          <div className="inline-block p-4 bg-white rounded-2xl border border-zinc-700 shadow-xl">
+            {ticket?.qr_code_data ? (
+              <img
+                src={ticket.qr_code_data}
+                alt="Entry QR Ticket"
+                className="w-48 h-48 object-contain"
+              />
+            ) : (
+              <QRCodeCanvas
+                value={qrPayload}
+                size={180}
+                level="H"
+                includeMargin={false}
+              />
+            )}
           </div>
           <div className="space-y-1">
-            <span className="block font-mono text-xs text-white font-bold tracking-wider">
-              TICKET ID: {ticketNumber || ticket?.ticket_number || 'EVT-2026-000101'}
+            <span className="block font-mono text-sm text-cyan-400 font-bold tracking-wider">
+              PASS ID: {passId}
+            </span>
+            <span className="block font-mono text-[11px] text-zinc-300 font-medium">
+              VERIFICATION STRING: <span className="text-cyan-400">{verifyStr}</span>
             </span>
             <span className="block font-mono text-[11px] text-zinc-400">
-              TOKEN: {secureToken || ticket?.secure_token}
+              SECURE TOKEN: {token}
             </span>
-            <p className="text-[11px] text-zinc-400 pt-1">Scan this QR code at gate entrance scanner for check-in</p>
+            <div className="pt-2">
+              <span className="inline-block px-3 py-1 rounded-md bg-zinc-900 border border-zinc-700 text-amber-300 font-medium text-[11px]">
+                ⚡ Present this QR at the entrance on event date ({event?.event_date || 'Event Day'}). One-time admission — expired upon Admin scanning.
+              </span>
+            </div>
           </div>
         </div>
 

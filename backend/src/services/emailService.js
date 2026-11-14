@@ -2,17 +2,47 @@ const resendClient = require('../config/resend');
 
 /**
  * Sends a high-contrast Black & Slate HTML ticket email to the guest using Resend API.
+ * Includes complete guest and event details fetched from the database, the scannable QR pass,
+ * and attaches the QR code PNG image for reliable rendering across all email clients (Gmail, Apple, Outlook).
  */
-async function sendQRTicketEmail({ guestEmail, guestName, eventTitle, eventDate, startTime, venue, address, ticketNumber, secureToken, qrCodeDataUrl }) {
+async function sendQRTicketEmail({
+    guestEmail,
+    guestName,
+    guestPhone,
+    registrationNumber,
+    eventTitle,
+    eventDate,
+    startTime,
+    venue,
+    address,
+    ticketNumber,
+    secureToken,
+    verificationString,
+    qrCodeDataUrl,
+    customAnswers
+}) {
     const fromAddress = process.env.EMAIL_FROM || 'EventHub <onboarding@resend.dev>';
     const dashboardUrl = `${process.env.FRONTEND_URL || 'http://localhost:5100'}/dashboard`;
+    const validVerificationString = verificationString || `EVENTHUB-VERIFY:${ticketNumber}:${secureToken}`;
+
+    // Format custom answers if present
+    let customAnswersHtml = '';
+    if (customAnswers && typeof customAnswers === 'object' && Object.keys(customAnswers).length > 0) {
+        customAnswersHtml = Object.entries(customAnswers)
+            .map(([key, val]) => `
+                <div class="detail-row">
+                    <span class="detail-label">${escapeHtml(formatLabel(key))}</span>
+                    <span class="detail-value">${escapeHtml(String(val))}</span>
+                </div>
+            `).join('');
+    }
 
     const htmlContent = `
     <!DOCTYPE html>
     <html>
     <head>
         <meta charset="utf-8">
-        <title>Your Event Ticket - ${eventTitle}</title>
+        <title>Your Event Ticket - ${escapeHtml(eventTitle || 'Event')}</title>
         <style>
             body {
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -65,8 +95,19 @@ async function sendQRTicketEmail({ guestEmail, guestName, eventTitle, eventDate,
                 font-weight: 700;
                 color: #ffffff;
                 margin-top: 0;
-                margin-bottom: 16px;
+                margin-bottom: 12px;
                 text-align: center;
+            }
+            .banner {
+                background-color: rgba(56, 189, 248, 0.1);
+                border: 1px solid #0284c7;
+                border-radius: 8px;
+                padding: 12px 16px;
+                margin: 16px 0;
+                font-size: 13px;
+                color: #bae6fd;
+                text-align: center;
+                line-height: 1.5;
             }
             .qr-wrapper {
                 text-align: center;
@@ -77,18 +118,25 @@ async function sendQRTicketEmail({ guestEmail, guestName, eventTitle, eventDate,
                 margin: 24px 0;
             }
             .qr-image {
-                width: 200px;
-                height: 200px;
+                width: 210px;
+                height: 210px;
                 background: #ffffff;
                 padding: 12px;
-                border-radius: 8px;
+                border-radius: 12px;
+                display: inline-block;
             }
             .ticket-token {
                 font-family: monospace;
+                color: #38bdf8;
+                font-size: 15px;
+                font-weight: 700;
+                margin-top: 14px;
+                letter-spacing: 1.5px;
+            }
+            .scan-hint {
+                font-size: 12px;
                 color: #94a3b8;
-                font-size: 13px;
-                margin-top: 12px;
-                letter-spacing: 1px;
+                margin-top: 6px;
             }
             .details-grid {
                 background-color: #1e293b;
@@ -148,45 +196,71 @@ async function sendQRTicketEmail({ guestEmail, guestName, eventTitle, eventDate,
                 <div class="badge">OFFICIAL QR ENTRY TICKET</div>
             </div>
             <div class="content">
-                <h1 class="event-title">${eventTitle}</h1>
+                <h1 class="event-title">${escapeHtml(eventTitle || 'Event Admission')}</h1>
                 
+                <div class="banner">
+                    📅 <strong>Present this QR on event date (${escapeHtml(eventDate || 'Scheduled Day')}) for gate scanning.</strong><br>
+                    <span>One-time entry: this QR expires immediately once scanned by Admin.</span>
+                </div>
+
                 <div class="qr-wrapper">
-                    <img src="${qrCodeDataUrl}" alt="QR Ticket Code" class="qr-image" />
-                    <div class="ticket-token">TICKET ID: ${ticketNumber}</div>
-                    <div style="font-size:11px; color:#64748b; margin-top:4px;">Scan at gate for instant check-in</div>
+                    ${qrCodeDataUrl ? `<img src="${qrCodeDataUrl}" alt="QR Entry Ticket" class="qr-image" />` : ''}
+                    <div class="ticket-token">UNIQUE PASS ID: ${escapeHtml(ticketNumber || 'N/A')}</div>
+                    <div class="ticket-token" style="font-size: 11px; color: #38bdf8; margin-top: 4px; word-break: break-all;">VERIFY: ${escapeHtml(validVerificationString)}</div>
+                    <div class="scan-hint">Scan at gate entrance on event date for check-in</div>
                 </div>
 
                 <div class="details-grid">
                     <div class="detail-row">
                         <span class="detail-label">Guest Name</span>
-                        <span class="detail-value">${guestName}</span>
+                        <span class="detail-value">${escapeHtml(guestName || 'Guest')}</span>
                     </div>
                     <div class="detail-row">
+                        <span class="detail-label">Guest Email</span>
+                        <span class="detail-value">${escapeHtml(guestEmail || '')}</span>
+                    </div>
+                    ${guestPhone ? `
+                    <div class="detail-row">
+                        <span class="detail-label">Phone</span>
+                        <span class="detail-value">${escapeHtml(guestPhone)}</span>
+                    </div>` : ''}
+                    ${registrationNumber ? `
+                    <div class="detail-row">
+                        <span class="detail-label">Registration ID</span>
+                        <span class="detail-value" style="font-family:monospace; color:#38bdf8;">${escapeHtml(registrationNumber)}</span>
+                    </div>` : ''}
+                    <div class="detail-row">
                         <span class="detail-label">Event Date</span>
-                        <span class="detail-value">${eventDate}</span>
+                        <span class="detail-value">${escapeHtml(eventDate || 'TBD')}</span>
                     </div>
                     <div class="detail-row">
                         <span class="detail-label">Start Time</span>
-                        <span class="detail-value">${startTime}</span>
+                        <span class="detail-value">${escapeHtml(startTime || 'TBD')}</span>
                     </div>
                     <div class="detail-row">
                         <span class="detail-label">Venue</span>
-                        <span class="detail-value">${venue}</span>
+                        <span class="detail-value">${escapeHtml(venue || 'TBD')}</span>
                     </div>
+                    ${address ? `
                     <div class="detail-row">
                         <span class="detail-label">Address</span>
-                        <span class="detail-value">${address}</span>
+                        <span class="detail-value">${escapeHtml(address)}</span>
+                    </div>` : ''}
+                    <div class="detail-row">
+                        <span class="detail-label">Verification String</span>
+                        <span class="detail-value" style="font-family:monospace; color:#38bdf8; font-size:11px; word-break:break-all;">${escapeHtml(validVerificationString)}</span>
                     </div>
                     <div class="detail-row">
                         <span class="detail-label">Entry Token</span>
-                        <span class="detail-value" style="font-family:monospace; color:#38bdf8;">${secureToken}</span>
+                        <span class="detail-value" style="font-family:monospace; color:#38bdf8;">${escapeHtml(secureToken || 'N/A')}</span>
                     </div>
+                    ${customAnswersHtml}
                 </div>
 
                 <a href="${dashboardUrl}" class="btn">View Ticket in Dashboard</a>
             </div>
             <div class="footer">
-                <p>Please present this digital pass at the entrance scanner on event day.</p>
+                <p>Please present this digital pass or the attached QR image at the entrance scanner on event day.</p>
                 <p>&copy; 2026 EventHub Management Platform. All rights reserved.</p>
             </div>
         </div>
@@ -195,20 +269,52 @@ async function sendQRTicketEmail({ guestEmail, guestName, eventTitle, eventDate,
     `;
 
     try {
-        if (resendClient) {
-            const data = await resendClient.emails.send({
+        if (resendClient && resendClient.isConfigured) {
+            const registeredAccountEmail = (process.env.RESEND_REGISTERED_EMAIL || 'priyapatel36306@gmail.com').trim().toLowerCase();
+            const recipientEmail = (guestEmail || '').trim().toLowerCase();
+
+            const emailPayload = {
                 from: fromAddress,
-                to: guestEmail,
-                subject: `🎟️ Your QR Ticket: ${eventTitle}`,
+                to: recipientEmail,
+                subject: `🎟️ Your QR Ticket: ${eventTitle || 'Event'} [Pass: ${ticketNumber || 'Confirmed'}]`,
                 html: htmlContent
-            });
-            console.log(`[Email Service] Sent QR Ticket email via Resend API to ${guestEmail} (ID: ${data.id || 'ok'})`);
+            };
+
+            // Attach QR code image for offline access and guaranteed display in all email clients
+            if (qrCodeDataUrl) {
+                const base64Content = qrCodeDataUrl.replace(/^data:image\/\w+;base64,/, '');
+                emailPayload.attachments = [
+                    {
+                        filename: `Ticket-QR-${ticketNumber || 'Pass'}.png`,
+                        content: base64Content
+                    }
+                ];
+            }
+
+            let response = await resendClient.emails.send(emailPayload);
+            
+            // If Resend rejects due to unverified test domain restriction, deliver to the registered account email
+            if (response && response.error) {
+                console.warn(`[Email Service - Resend Notice] Direct send to ${recipientEmail} encountered restriction (${response.error.message}). Delivering directly to registered account: ${registeredAccountEmail}`);
+                emailPayload.to = registeredAccountEmail;
+                emailPayload.subject = `🎟️ [EventHub Ticket Pass] ${eventTitle || 'Event'} [${ticketNumber}] (Attendee: ${guestName} <${recipientEmail}>)`;
+                response = await resendClient.emails.send(emailPayload);
+            }
+
+            if (response && response.error) {
+                console.error('[Email Service - Resend API Error]', response.error);
+            } else {
+                console.log(`[Email Service] ✅ QR Ticket email successfully dispatched via Resend API to ${emailPayload.to} (ID: ${response?.data?.id || 'ok'})`);
+            }
         } else {
             console.log(`\n======================================================`);
             console.log(`[BLACK & SLATE TICKET EMAIL PREVIEW MODE]`);
             console.log(`To: ${guestEmail}`);
-            console.log(`Subject: Your QR Ticket: ${eventTitle}`);
+            console.log(`Subject: Your QR Ticket: ${eventTitle} [Pass: ${ticketNumber}]`);
             console.log(`Ticket Number: ${ticketNumber}`);
+            console.log(`Registration Number: ${registrationNumber}`);
+            console.log(`Event Date: ${eventDate}`);
+            console.log(`Venue: ${venue}`);
             console.log(`Secure Token: ${secureToken}`);
             console.log(`======================================================\n`);
         }
@@ -220,9 +326,10 @@ async function sendQRTicketEmail({ guestEmail, guestName, eventTitle, eventDate,
 /**
  * Sends a high-contrast Member QR Pass email to a newly registered member.
  */
-async function sendMemberPassEmail({ email, name, memberId, secureToken, qrCodeDataUrl, role }) {
+async function sendMemberPassEmail({ email, name, memberId, secureToken, verificationString, qrCodeDataUrl, role }) {
     const fromAddress = process.env.EMAIL_FROM || 'EventHub <onboarding@resend.dev>';
     const dashboardUrl = `${process.env.FRONTEND_URL || 'http://localhost:5100'}/dashboard`;
+    const validVerificationString = verificationString || `EVENTHUB-MEMBER:${memberId}:${secureToken}`;
 
     const htmlContent = `
     <!DOCTYPE html>
@@ -251,19 +358,21 @@ async function sendMemberPassEmail({ email, name, memberId, secureToken, qrCodeD
                 <div class="badge">Official Member Pass</div>
             </div>
             <div class="content">
-                <h2 style="margin:0 0 8px 0; font-size: 22px;">Welcome, ${name}!</h2>
+                <h2 style="margin:0 0 8px 0; font-size: 22px;">Welcome, ${escapeHtml(name)}!</h2>
                 <p style="font-size: 13px; color: #94a3b8; margin: 0 0 16px 0;">Your unique digital QR pass has been generated.</p>
                 
                 <div class="qr-wrap">
-                    <img src="${qrCodeDataUrl}" alt="Member QR Code" width="200" height="200" style="display:block;" />
+                    ${qrCodeDataUrl ? `<img src="${qrCodeDataUrl}" alt="Member QR Code" width="200" height="200" style="display:block;" />` : ''}
                 </div>
 
-                <div class="unique-id">UNIQUE ID: ${memberId}</div>
+                <div class="unique-id">UNIQUE ID: ${escapeHtml(memberId)}</div>
+                <div style="font-family: monospace; font-size: 12px; color: #38bdf8; margin-top: 6px; word-break: break-all;">VERIFY: ${escapeHtml(validVerificationString)}</div>
 
                 <div class="meta-box">
-                    <p style="margin: 4px 0; font-size: 13px;"><strong>Member:</strong> ${name}</p>
-                    <p style="margin: 4px 0; font-size: 13px;"><strong>Email:</strong> ${email}</p>
-                    <p style="margin: 4px 0; font-size: 13px;"><strong>Role:</strong> ${role.toUpperCase()}</p>
+                    <p style="margin: 4px 0; font-size: 13px;"><strong>Member:</strong> ${escapeHtml(name)}</p>
+                    <p style="margin: 4px 0; font-size: 13px;"><strong>Email:</strong> ${escapeHtml(email)}</p>
+                    <p style="margin: 4px 0; font-size: 13px;"><strong>Role:</strong> ${escapeHtml((role || 'guest').toUpperCase())}</p>
+                    <p style="margin: 4px 0; font-size: 13px;"><strong>Verification String:</strong> <span style="font-family:monospace; color:#38bdf8; font-size:11px;">${escapeHtml(validVerificationString)}</span></p>
                     <p style="margin: 4px 0; font-size: 11px; color: #94a3b8;"><strong>Notice:</strong> One-time admission. Expired upon Admin scanning at the gate.</p>
                 </div>
 
@@ -278,20 +387,65 @@ async function sendMemberPassEmail({ email, name, memberId, secureToken, qrCodeD
     `;
 
     try {
-        if (resendClient) {
-            const data = await resendClient.emails.send({
+        if (resendClient && resendClient.isConfigured) {
+            const registeredAccountEmail = (process.env.RESEND_REGISTERED_EMAIL || 'priyapatel36306@gmail.com').trim().toLowerCase();
+            const recipientEmail = (email || '').trim().toLowerCase();
+
+            const emailPayload = {
                 from: fromAddress,
-                to: email,
+                to: recipientEmail,
                 subject: `🎟️ Your EventHub Member Pass [${memberId}]`,
                 html: htmlContent
-            });
-            console.log(`[Email Service] Sent Member QR Pass email to ${email} (ID: ${data.id || 'ok'})`);
+            };
+
+            if (qrCodeDataUrl) {
+                const base64Content = qrCodeDataUrl.replace(/^data:image\/\w+;base64,/, '');
+                emailPayload.attachments = [
+                    {
+                        filename: `Member-Pass-${memberId}.png`,
+                        content: base64Content
+                    }
+                ];
+            }
+
+            let response = await resendClient.emails.send(emailPayload);
+            
+            // If Resend rejects due to unverified test domain restriction, deliver to the registered account email
+            if (response && response.error) {
+                console.warn(`[Email Service - Resend Notice] Direct send to ${recipientEmail} encountered restriction (${response.error.message}). Delivering directly to registered account: ${registeredAccountEmail}`);
+                emailPayload.to = registeredAccountEmail;
+                emailPayload.subject = `🎟️ [EventHub Member Pass] ${memberId} (Member: ${name} <${recipientEmail}>)`;
+                response = await resendClient.emails.send(emailPayload);
+            }
+
+            if (response && response.error) {
+                console.error('[Email Service - Resend API Error]', response.error);
+            } else {
+                console.log(`[Email Service] ✅ Member QR Pass email successfully dispatched via Resend API to ${emailPayload.to} (ID: ${response?.data?.id || 'ok'})`);
+            }
         } else {
             console.log(`[Member Pass Email Preview] Generated for ${email} with ID ${memberId}`);
         }
     } catch (err) {
         console.error('[Email Service Member Pass Error]', err.message);
     }
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function formatLabel(str) {
+    if (!str) return '';
+    return str
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, l => l.toUpperCase());
 }
 
 module.exports = {

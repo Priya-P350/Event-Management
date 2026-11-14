@@ -1,14 +1,27 @@
 const { Resend } = require('resend');
 
-const apiKey = process.env.RESEND_API_KEY;
-
-let resendClient = null;
-
-if (apiKey && apiKey !== 'your_resend_api_key') {
-    resendClient = new Resend(apiKey);
-    console.log('[Email Service] Configured live Resend API Client.');
-} else {
-    console.log('[Email Service] RESEND_API_KEY not set. Email service will run in Console Preview Mode.');
+function getResendClient() {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (apiKey && apiKey !== 'your_resend_api_key' && apiKey.trim().length > 0) {
+        return new Resend(apiKey.trim());
+    }
+    return null;
 }
 
-module.exports = resendClient;
+const resendProxy = new Proxy({}, {
+    get(target, prop) {
+        const client = getResendClient();
+        if (prop === 'isConfigured') {
+            return !!client;
+        }
+        if (prop === 'client' || prop === 'getClient') {
+            return client;
+        }
+        if (!client) {
+            return undefined;
+        }
+        return client[prop];
+    }
+});
+
+module.exports = resendProxy;

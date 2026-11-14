@@ -1,109 +1,94 @@
-# Project: Event Platform Overhaul (Wizard, Minimalist UI, & Admin Data Isolation)
+# Project: EventHub Fullstack Audit, Remediation & Automated Test Suite
 
 ## Architecture
-Fullstack Node.js / React event management platform with digital QR passes, attendance scanning, and role-based administration.
-- **Backend**: Express.js REST API with dual ORM/database engine (Drizzle SQLite for lightweight/embedded persistence, Mongoose MongoDB for document persistence). JWT-based authentication with role-based access control (`guest`, `scanner_staff`, `event_admin`, `super_admin`).
-- **Frontend**: Vite + React 18 SPA, React Router DOM v6, React Hook Form v7, Tailwind CSS with custom Oceanic color tokens (`#0B1928`, `#122538`, `#1E394E`, `#2B4E66`, `#4A96BA`, `#95B8C9`, `#E5F4F9`), and Lucide icons.
+Fullstack Node.js / Express / React event management platform with digital QR passes, attendance scanning, multi-tenant organizer isolation, and dual database support (Drizzle SQLite and Mongoose MongoDB).
+- **Backend**: Express.js REST API with JWT authentication, RBAC (`guest`, `scanner_staff`, `event_admin`, `super_admin`), multi-tenant data scoping by `created_by` / `admin_id`.
+- **Frontend**: Vite + React 18 SPA, React Router DOM v6, React Hook Form v7, Tailwind CSS with Oceanic theme tokens (`#0B1928`, `#122538`, `#1E394E`, `#2B4E66`, `#4A96BA`, `#95B8C9`, `#E5F4F9`), and Lucide icons.
 - **Data Flow**:
-  - Event Admin creates event via 4-step wizard -> `POST /api/events` (sets `created_by: req.user.id`).
-  - Guests register for events -> `POST /api/registrations` (links `event_id`).
-  - Attendance check-in -> `POST /api/checkin/scan` (validates QR pass against `event_id`).
-  - Admin queries (/dashboard, /registrations, /payments, /attendance, exports) -> scoped by `event.created_by === req.user.id` for `event_admin`, unrestricted for `super_admin`.
+  - Registration / Auth -> `POST /api/auth/register` (strictly creates `guest`), `POST /api/auth/login` (issues JWT with `id`, `role`, `member_id`, `admin_id`).
+  - Event Management -> `POST /api/events`, `GET /api/events`, `GET /api/events/:id`, `PUT /api/events/:id`, `DELETE /api/events/:id`.
+  - Registration & Passes -> `POST /api/registrations` (checks capacity, generates `REG-2026-XXXXXX` and digital pass `EVT-2026-XXXXXX`), `GET /api/tickets/:token`.
+  - Gate Check-in -> `POST /api/checkin/scan` (requires `scanner_staff`, `event_admin`, or `super_admin`; enforces event ownership for event admins; atomically expires pass and blocks duplicate entries with `409 ALREADY_USED`).
+  - Admin & Isolation -> `/api/admin/*` (dashboard metrics, registrations, payments, attendance, and CSV exports strictly scoped to events owned by authenticated admin; `/api/admin/users` restricted to `super_admin`).
 
 ## Feature Inventory
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
-| 1 | Stray Syntax Error Fix | Remove extra closing brace at `backend/src/controllers/adminController.js:122` | M1 | Survey 1, 3 |
-| 2 | Unique Admin Identifier (`admin_id`) | Assign distinct business identifier (e.g. `ADM-2026-XXXXXX` / `ADM-0001`) to all admin accounts in schema, registration, login, and JWT | M1 | Survey 1, R3 |
-| 3 | Admin Data Isolation: Dashboard | Scope `/api/admin/dashboard` metrics, revenue, and recent registrations strictly to events owned by the authenticated admin (`created_by`) | M1 | Survey 1, R3 |
-| 4 | Admin Data Isolation: Registrations & Attendees | Scope `/api/admin/registrations` and attendee lists to events owned by the authenticated admin | M1 | Survey 1, R3 |
-| 5 | Admin Data Isolation: CSV Exports | Scope `/api/admin/export/registrations` and `/api/admin/export/payments` to owned events only | M1 | Survey 1, R3 |
-| 6 | Admin Data Isolation: Payments & Financials | Scope `/api/admin/payments` transactions strictly to events created by the authenticated admin | M1 | Survey 1, R3 |
-| 7 | Admin Data Isolation: Attendance Logs | Scope `/api/admin/attendance` check-in logs and `/api/checkin/events/:id/attendance` to owned events (403 for unauthorized event admins) | M1 | Survey 1, R3 |
-| 8 | Event Mutation Authorization | Ensure `PUT /api/events/:id` and `DELETE /api/events/:id` reject unauthorized event admins with 403 Forbidden | M1 | Survey 1, R3 |
-| 9 | Multi-Admin Tenancy Automated Tests | Add tests in `backend/src/tests/api.test.js` validating cross-admin isolation, unique identifiers, and 403 rejections | M1 | Survey 1, Acceptance Criteria |
-| 10 | Member Registration Redesign (`RegisterPage.jsx`) | Remove 5-column marketing sidebar, text walls, and clutter; center single card; fix `RadioCardsField` state binding; preserve all 6 inputs, validations, and QR pass generation | M2 | Survey 3, R2 |
-| 11 | Guest Registration Redesign (`GuestRegistration.jsx`) | Remove asymmetric 3-col layout and developer jargon; add compact event summary strip; preserve all inputs, validations, free pass issuance, and Razorpay flow | M2 | Survey 3, R2 |
-| 12 | Event Creation Wizard: Step 1 (Category) | Preset selection (`Tech Summit`, `ITI Trade Fair`, `Workshop`, `Music Gala`, `Conference`) + Custom Category input with dynamic binding | M3 | Survey 2, R1 |
-| 13 | Event Creation Wizard: Step 2 (Core Details) | Title, venue, address, date, time, cover image with preview, description, map URL with validation | M3 | Survey 2, R1 |
-| 14 | Event Creation Wizard: Step 3 (Ticketing & Criteria) | Pricing, capacity, registration window (open/close dates), custom criteria/eligibility (`iti_eligibility`, `iti_trade`, `iti_institute`), status | M3 | Survey 2, R1 |
-| 15 | Event Creation Wizard: Step 4 (Review & Publish) | Consolidated review summary with section jump/edit links, and final creation action calling `eventService.createEvent` | M3 | Survey 2, R1 |
-| 16 | Event Creation Wizard: State Preservation | Continuous form state preservation across forward and backward step navigation without data loss | M3 | Survey 2, R1 |
-| 17 | Final Build & Regression Verification | Verify zero frontend build errors (`npm run build`) and 100% backend test pass (`npm test`) | M4 | Survey 1, 2, 3 |
+| 1 | Auth Role Self-Escalation Fix | Enforce public registration defaults strictly to `guest`; reject or strip privileged roles (`super_admin`, `event_admin`, `scanner_staff`) from unauthenticated requests | M1 | Survey 1, R1.1 |
+| 2 | Member ID Uniqueness & Retry Loop | Add UNIQUE constraints in SQLite, Postgres, and Mongo schemas; implement collision retry loop for `member_id` (`MEM-2026-XXXXXX`) | M1 | Survey 1, R1.1 |
+| 3 | Super Admin `admin_id` Collision Fix | Prevent hardcoded `ADM-0001` crash on login when non-primary super admins log in; assign unique `admin_id` dynamically | M1 | Survey 1, R1.1 |
+| 4 | Gate Check-in Authentication & RBAC | Replace `optionalAuth` on `POST /api/checkin/scan` with `authenticateToken, requireStaffOrAdmin`; block unauthenticated or guest check-in attempts | M1 | Survey 2, R1.4 |
+| 5 | Gate Check-in Organizer Data Isolation | In `POST /api/checkin/scan`, verify that `event_admin` can only scan tickets for events they created (`created_by === req.user.id`); return 403 Forbidden otherwise | M1 | Survey 2, R1.4, R1.5 |
+| 6 | Gate Check-in SQLite Concurrency Fix | Handle SQLite duplicate attendance unique constraint collisions gracefully in `processCheckinAtomic`, returning `409 ALREADY_USED` instead of unhandled 500 | M1 | Survey 2, R1.4 |
+| 7 | Global User Data Isolation (`/api/admin/users`) | Restrict `GET /api/admin/users` strictly to `super_admin`; return 403 Forbidden to regular `event_admin` to prevent cross-tenant data leakage | M1 | Survey 2, R1.5 |
+| 8 | Payment Refund Tenant Authorization | Verify event ownership in `POST /api/admin/refund` so `event_admin` can only refund payments for their own events; return 403 Forbidden otherwise | M1 | Survey 2, R1.5 |
+| 9 | Gallery Image Delete Argument & Ownership Fix | Fix argument passing to `dbQuery.deleteEventImage(eventId, imageId)` and enforce event creator authorization | M1 | Survey 2, R1.5 |
+| 10 | Capacity Oversubscription Race Condition Fix | Account for active pending checkout registrations in `seats_remaining` calculation; add capacity verification gate in `paymentController.verifyPayment` before confirming | M2 | Survey 1, R1.2 |
+| 11 | ITI Metadata Unpacking in SQLite | Automatically unpack `---ITI_META---` JSON delimiters in `dbQuery.getEvents` and `getEventById` so `iti_trade`, `iti_institute`, and `iti_eligibility` populate cleanly | M2 | Survey 1, R1.2 |
+| 12 | Public Event Directory Default Status | Default unauthenticated requests to `GET /api/events` to `status = 'registration_open'`, hiding draft and cancelled events | M2 | Survey 1, R1.2 |
+| 13 | Ticket & Registration Number Collision Retry | Wrap `ticket_number` (`EVT-2026-XXXXXX`) and `registration_number` (`REG-2026-XXXXXX`) creation in retry loops to prevent duplicate key 500 errors | M2 | Survey 1, R1.3 |
+| 14 | Cross-Database Ticket Lookup Parity | Support ticket UUID lookup in SQLite `getTicketByToken` to match MongoDB functionality | M2 | Survey 1, R1.3 |
+| 15 | Scanner Staff Registration Details Access | Allow `scanner_staff` to access `GET /api/registrations/:id` for gate attendee verification | M2 | Survey 1, R1.3, R1.4 |
+| 16 | Automatic Offline Stubs for Resend & Razorpay | Add `NODE_ENV === 'test'` automatic stub guards in `config/resend.js` and `config/razorpay.js` to guarantee no live external calls in test environments | M2 | Survey 1, Survey 2, R3 |
+| 17 | Admin CSV Export Token Authentication | Append `?token=${token}` to CSV export URLs in `serviceModules.js` so `window.open` downloads CSVs with HTTP 200 rather than failing with 401 | M3 | Survey 3, R1.6 |
+| 18 | Register Role Radio Card State Highlight | Pass `value={selectedRole}` and `onChange` to `RadioCardsField` in `RegisterPage.jsx` so account type cards visually highlight on selection | M3 | Survey 3, R1.6 |
+| 19 | Countdown Timer Date Parsing Robustness | Normalize date/time strings and add `isNaN(difference)` fallback in `CountdownTimer.jsx` to prevent NaN display | M3 | Survey 3, R1.6 |
+| 20 | Homepage Featured Event Dynamic Link | Dynamically link featured card on `Home.jsx` to `events[0]?.id || '/events'` rather than hardcoded stale UUID | M3 | Survey 3, R1.6 |
+| 21 | Homepage Free Ticket Badge Consistency | Display `'FREE ENTRY'` on `Home.jsx` when `ticket_price === 0` to match Event Directory badge | M3 | Survey 3, R1.6 |
+| 22 | Axios 401 Session Expiry Interceptor | Handle 401 in `api.js` response interceptor to clear `localStorage` token and redirect gracefully | M3 | Survey 3, R1.6 |
+| 23 | Jest Test Runner Concurrency Fix | Update `backend/package.json` test script with `--runInBand` to prevent SQLite file lock contention and timeouts | M4 | Survey 2, R3 |
+| 24 | Seed SQLite Missing Test Ticket | Seed ticket `t1111111-1111-1111-1111-111111111111` in `seedSqliteData` so `api.test.js` checkin test passes reliably | M4 | Survey 2, R3 |
+| 25 | Comprehensive Automated Test Expansion | Expand automated integration tests in `backend/src/tests/` to verify all 6 components (RBAC, capacity, tickets, duplicate checkin 409, multi-tenant isolation, external stubs) with 100% pass | M4 | Survey 2, Acceptance Criteria |
+| 26 | Final Fullstack Verification Gate | Verify 100% test pass on backend (`npm test`) and 100% clean production build on frontend (`npm run build`) | M4 | Acceptance Criteria |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| 1 | Backend Admin Unique Identifier & Strict Data Isolation (R3) | Fix syntax error, introduce `admin_id`, enforce data isolation across all admin queries and controllers, add automated tests in `backend/src/tests/api.test.js` | none | IN_PROGRESS |
-| 2 | Minimalist Registration UI Overhaul (R2) | Redesign `RegisterPage.jsx` and `GuestRegistration.jsx` to clean, modern, minimal interfaces without text walls while preserving all inputs, validations, and flows | M1 | PLANNED |
-| 3 | Multi-Step Event Creation Wizard (R1) | Convert `AdminCreateEvent.jsx` into 4-step guided wizard with presets + custom category, core details, ticketing & criteria, review summary, and backward/forward state preservation | M1 | PLANNED |
-| 4 | Comprehensive End-to-End Verification & Regression | Full test suite execution, frontend build verification, and acceptance criteria audit | M1, M2, M3 | PLANNED |
+| 1 | Backend Security, RBAC & Multi-Tenant Data Isolation | Features 1–9: Auth role self-escalation fix, member_id uniqueness, admin_id collision fix, check-in scan auth & organizer isolation, check-in race condition fix, admin users super_admin restriction, refund isolation, gallery delete fix | none | IN_PROGRESS |
+| 2 | Event Management, Ticketing & Capacity Integrity | Features 10–16: Capacity oversubscription fix, ITI metadata unpacking, public events status filter, ticket/reg collision retry loops, SQLite ticket lookup by ID, scanner staff registration view, automatic Resend & Razorpay test stubs | M1 | PLANNED |
+| 3 | Frontend UI, Form Workflows & Export Remediation | Features 17–22: Admin CSV export token URL fix, RegisterPage radio card visual highlight, CountdownTimer NaN fix, Home.jsx dynamic link & badge consistency, Axios 401 interceptor, frontend build verification | none | PLANNED |
+| 4 | Comprehensive Automated Test Expansion & Final Verification | Features 23–26: Jest runner --runInBand fix, SQLite seed ticket fix, comprehensive unit & integration tests covering all 6 components with 100% pass, final frontend build verification | M1, M2, M3 | PLANNED |
 
 ## Interface Contracts
 
-### Admin Account & JWT Payload
-```typescript
-interface AdminUser {
-  id: string; // UUID
-  admin_id: string; // e.g. "ADM-2026-XXXXXX" or "ADM-0001"
-  name: string;
-  email: string;
-  role: 'event_admin' | 'super_admin';
-}
+### Authenticated Check-in Request (`POST /api/checkin/scan`)
+- **Headers**: `Authorization: Bearer <token>`
+- **Authorized Roles**: `scanner_staff`, `event_admin`, `super_admin`
+- **Request Body**: `{ "ticketToken": string, "eventId"?: string }`
+- **Responses**:
+  - `200 OK`: `{ "success": true, "code": "ENTRY_APPROVED", "title": "ADMISSION GRANTED", "ticket": { ... } }`
+  - `401 Unauthorized`: Token missing or invalid.
+  - `403 Forbidden`: Role is `guest`, or `event_admin` is scanning ticket for an event they do not own (`ticket.event.created_by !== req.user.id`).
+  - `404 Not Found`: Ticket token does not exist.
+  - `409 Conflict`: Ticket already used (`code: "ALREADY_USED"`).
 
-interface JwtPayload {
-  id: string;
-  admin_id?: string;
-  name: string;
-  email: string;
-  role: string;
-}
-```
+### Admin CSV Export Endpoints
+- **Endpoints**: `GET /api/admin/export/registrations`, `GET /api/admin/export/payments`
+- **Authentication**: Accepts Bearer header or `?token=<jwt_token>` query parameter.
+- **Access Control**: Scoped by `admin_id` (`event.created_by === req.user.id`) for `event_admin`, global for `super_admin`.
 
-### Scoped Database Queries (`dbQuery`)
+### Capacity Check Contract (`seats_remaining`)
 ```typescript
-getDashboardStats(adminId?: string): Promise<DashboardStats>
-getAllRegistrations(adminId?: string): Promise<Registration[]>
-getAllPayments(adminId?: string): Promise<Payment[]>
-getAllAttendance(adminId?: string): Promise<AttendanceLog[]>
-getEvents(filters?: { created_by?: string; category?: string }): Promise<Event[]>
+seats_remaining = Math.max(0, event.capacity - (confirmed_registrations + active_pending_registrations))
 ```
-- If caller is `super_admin` (`adminId` omitted or undefined): Return global platform records.
-- If caller is `event_admin` (`adminId` provided): Filter strictly where `event.created_by === adminId`.
-
-### Event Creation Payload (`POST /api/events`)
-```typescript
-interface CreateEventPayload {
-  title: string;
-  description: string;
-  category: string; // "Tech Summit" | "ITI Trade Fair" | "Workshop" | "Music Gala" | "Conference" | string
-  cover_image_url?: string;
-  event_date: string;
-  start_time: string;
-  end_time: string;
-  venue: string;
-  address: string;
-  google_maps_url?: string;
-  ticket_price: number;
-  capacity: number;
-  registration_open_at?: string;
-  registration_close_at?: string;
-  status: 'registration_open' | 'draft' | 'completed' | 'cancelled';
-  iti_institute?: string;
-  iti_trade?: string;
-  iti_eligibility?: string;
-}
-```
+- In `verifyPayment`, if `seats_remaining <= 0`, payment is marked for refund and registration returns 400 SOLD OUT.
 
 ## Code Layout
-- `backend/src/controllers/adminController.js`: Dashboard stats, registration lists, payments, exports, user role management.
-- `backend/src/controllers/eventController.js`: Event CRUD, creator assignment, update/delete authorization checks.
-- `backend/src/controllers/checkinController.js`: QR ticket scanning, event attendance list authorization.
-- `backend/src/controllers/registrationController.js`: Registration creation, ticket generation, registration detail scoping.
-- `backend/src/controllers/authController.js`: User/Admin registration, login, JWT token generation with `admin_id`.
-- `backend/src/utils/ticketToken.js`: Unique identifier generation (`generateAdminId`).
-- `backend/src/config/db.js`: Database queries with `adminId` filtering for Drizzle and MongoDB.
-- `backend/src/tests/api.test.js`: Automated API test suite with multi-admin isolation tests.
-- `frontend/src/pages/RegisterPage.jsx`: Member account registration and digital QR pass.
-- `frontend/src/pages/GuestRegistration.jsx`: Event guest registration with free/paid checkout.
-- `frontend/src/pages/admin/AdminCreateEvent.jsx`: 4-step event creation wizard flow.
+- `backend/src/controllers/authController.js`: Registration role validation, login, member_id and admin_id generation.
+- `backend/src/controllers/checkinController.js`: QR ticket scanning, organizer authorization, atomic check-in transitions.
+- `backend/src/controllers/adminController.js`: Admin metrics, user list (super_admin only), payments, refunds with ownership checks.
+- `backend/src/controllers/eventController.js`: Event CRUD, status filtering, ITI metadata unpacking.
+- `backend/src/controllers/registrationController.js`: Free/paid registrations, ticket generation, collision retry loops.
+- `backend/src/controllers/paymentController.js`: Razorpay order creation, payment verification with capacity check.
+- `backend/src/controllers/galleryController.js`: Event gallery image management with ownership checks.
+- `backend/src/routes/checkinRoutes.js`: Scan route middleware (`authenticateToken, requireStaffOrAdmin`).
+- `backend/src/routes/adminRoutes.js`: Admin routes middleware (`requireRole(['super_admin'])` for `/users`).
+- `backend/src/config/db.js`: Database queries, schema migrations, seed functions, transaction/retry helpers.
+- `backend/src/config/resend.js`: Resend client with test environment auto-stub.
+- `backend/src/config/razorpay.js`: Razorpay client with test environment auto-stub.
+- `backend/src/tests/`: Automated unit and integration test suites.
+- `frontend/src/services/serviceModules.js`: API service functions with token query params for exports.
+- `frontend/src/pages/RegisterPage.jsx`: Member registration with radio card state binding.
+- `frontend/src/components/CountdownTimer.jsx`: Date calculation with robust time parsing.
+- `frontend/src/pages/Home.jsx`: Dynamic featured event card and price badge.
+- `frontend/src/services/api.js`: Axios client and response interceptors.

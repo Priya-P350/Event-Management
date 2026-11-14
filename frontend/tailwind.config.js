@@ -8,54 +8,56 @@ export default {
     extend: {
       colors: {
         oceanic: {
-          950: '#0B1928', // Deepest dark textured slate / indigo obsidian
-          900: '#122538', // Midnight slate card surface
-          800: '#1E394E', // Rich marine slate border
-          700: '#2B4E66', // Elevated border / focus accent
-          600: '#304E61', // Dominant mid slate teal from image
-          500: '#38708C',
-          400: '#4A96BA', // Luminous marine cyan accent
-          300: '#95B8C9', // Soft oceanic mint-slate (8.2:1 AAA subtext)
-          200: '#C3E2ED',
-          100: '#E5F4F9', // Crisp ice foam white (15.1:1 AAA primary text)
-          50: '#F0F8FA',
+          950: '#020817', // Deepest midnight abyssal ocean
+          900: '#041124', // Deep trench card / panel background
+          850: '#061730', // Elevated deep sea glass
+          800: '#071d38', // Ocean shelf border / elevated container
+          700: '#0c2c52', // Twilight ocean border / accent border
+          600: '#0f3a69', // Sunlit marine blue
+          500: '#0284c7', // Ocean blue accent
+          400: '#38bdf8', // Bioluminescent sky aqua
+          300: '#67e8f9', // Bioluminescent electric cyan
+          200: '#bae6fd', // Glacial foam
+          100: '#e0f2fe', // Crisp ice foam white (primary text)
+          50: '#f0fdfa',  // Pearl highlights
         },
         forest: {
-          950: '#0B1928', // Base background
-          900: '#122538', // Card panels
-          800: '#1E394E', // Borders & dividers
-          700: '#2B4E66', // Hover / elevated borders
-          500: '#38708C',
-          400: '#4A96BA',
-          300: '#95B8C9', // Secondary text & icons (AAA)
-          200: '#C3E2ED',
-          100: '#E5F4F9', // Primary high-contrast text & CTAs (AAA)
-          50: '#F0F8FA',
+          // Backward compatibility mapped to deep ocean
+          950: '#020817',
+          900: '#041124',
+          800: '#071d38',
+          700: '#0c2c52',
+          500: '#0284c7',
+          400: '#38bdf8',
+          300: '#7dd3fc',
+          200: '#bae6fd',
+          100: '#e0f2fe',
+          50: '#f0fdfa',
         },
         pine: {
-          950: '#0B1928',
-          900: '#122538',
-          800: '#1E394E',
-          700: '#2B4E66',
-          300: '#95B8C9',
-          100: '#E5F4F9',
+          950: '#020817',
+          900: '#041124',
+          800: '#071d38',
+          700: '#0c2c52',
+          300: '#7dd3fc',
+          100: '#e0f2fe',
         },
         slate: {
-          850: '#122538',
-          950: '#0B1928',
+          850: '#041124',
+          950: '#020817',
         },
         obsidian: {
-          DEFAULT: '#0B1928',
-          card: '#122538',
-          border: '#1E394E',
-          light: '#2B4E66',
+          DEFAULT: '#020817',
+          card: '#041124',
+          border: '#071d38',
+          light: '#0c2c52',
         },
         brand: {
-          sky: '#4A96BA',
-          blue: '#38708C',
-          indigo: '#1F2E4A',
-          teal: '#95B8C9',
-          pine: '#E5F4F9',
+          sky: '#38bdf8',
+          blue: '#0284c7',
+          indigo: '#071d38',
+          teal: '#2dd4bf',
+          pine: '#e0f2fe',
         }
       },
       fontFamily: {

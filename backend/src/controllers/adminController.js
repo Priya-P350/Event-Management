@@ -2,12 +2,19 @@ const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const dbQuery = require("../config/db");
 const { convertToCSV } = require("../utils/csvExport");
-const { generateMemberToken } = require('../utils/ticketToken');
+const { generateMemberToken, generateAdminId } = require('../utils/ticketToken');
 const { generateQRCodeDataUrl } = require('../services/qrService');
+
+function getAdminIdFilter(req) {
+  if (req.user && req.user.role === 'super_admin') {
+    return undefined; // Global oversight
+  }
+  return req.user ? req.user.id : undefined;
+}
 
 async function getDashboardStats(req, res, next) {
   try {
-    const stats = await dbQuery.getAdminDashboardStats();
+    const stats = await dbQuery.getAdminDashboardStats(getAdminIdFilter(req));
     res.json({ success: true, stats });
   } catch (err) {
     next(err);
@@ -50,6 +57,9 @@ async function createUser(req, res, next) {
     });
     const qrCodeDataUrl = await generateQRCodeDataUrl(qrPayload);
 
+    const isAdmin = ['event_admin', 'super_admin'].includes(userRole);
+    const adminId = isAdmin ? generateAdminId() : null;
+
     const newUser = {
       id: uuidv4(),
       name,
@@ -57,6 +67,8 @@ async function createUser(req, res, next) {
       phone: phone || '',
       password_hash,
       role: userRole,
+      admin_id: adminId,
+      adminId: adminId,
       member_id: memberId,
       memberId: memberId,
       qr_token: secureToken,
@@ -75,6 +87,8 @@ async function createUser(req, res, next) {
         email: newUser.email,
         phone: newUser.phone,
         role: newUser.role,
+        admin_id: adminId,
+        adminId: adminId,
         member_id: memberId,
         memberId: memberId,
         qr_status: 'active',
@@ -119,12 +133,15 @@ async function resetMemberQr(req, res, next) {
     next(err);
   }
 }
-}
 
 async function updateUserRole(req, res, next) {
   try {
     const { id } = req.params;
     const { role } = req.body;
+
+    if (req.user && req.user.role !== 'super_admin') {
+      return res.status(403).json({ success: false, message: 'Forbidden. Only super admins can update user roles.' });
+    }
 
     if (!role) {
       return res.status(400).json({ success: false, message: 'Role parameter is required.' });
@@ -145,6 +162,10 @@ async function deleteUser(req, res, next) {
   try {
     const { id } = req.params;
 
+    if (req.user && req.user.role !== 'super_admin') {
+      return res.status(403).json({ success: false, message: 'Forbidden. Only super admins can delete users.' });
+    }
+
     if (req.user && req.user.id === id) {
       return res.status(400).json({ success: false, message: 'You cannot delete your own admin account.' });
     }
@@ -158,7 +179,7 @@ async function deleteUser(req, res, next) {
 
 async function getAllRegistrations(req, res, next) {
   try {
-    const registrations = await dbQuery.getAllRegistrations();
+    const registrations = await dbQuery.getAllRegistrations(getAdminIdFilter(req));
     res.json({ success: true, count: registrations.length, registrations });
   } catch (err) {
     next(err);
@@ -167,7 +188,7 @@ async function getAllRegistrations(req, res, next) {
 
 async function getAllPayments(req, res, next) {
   try {
-    const payments = await dbQuery.getAllPayments();
+    const payments = await dbQuery.getAllPayments(getAdminIdFilter(req));
     res.json({ success: true, count: payments.length, payments });
   } catch (err) {
     next(err);
@@ -176,7 +197,7 @@ async function getAllPayments(req, res, next) {
 
 async function getAllAttendance(req, res, next) {
   try {
-    const attendance = await dbQuery.getAllAttendance();
+    const attendance = await dbQuery.getAllAttendance(getAdminIdFilter(req));
     res.json({ success: true, count: attendance.length, attendance });
   } catch (err) {
     next(err);
@@ -185,7 +206,7 @@ async function getAllAttendance(req, res, next) {
 
 async function exportRegistrationsCSV(req, res, next) {
   try {
-    const registrations = await dbQuery.getAllRegistrations();
+    const registrations = await dbQuery.getAllRegistrations(getAdminIdFilter(req));
 
     const columns = [
       "registration_number",
@@ -211,7 +232,7 @@ async function exportRegistrationsCSV(req, res, next) {
 
 async function exportPaymentsCSV(req, res, next) {
   try {
-    const payments = await dbQuery.getAllPayments();
+    const payments = await dbQuery.getAllPayments(getAdminIdFilter(req));
 
     const columns = [
       "razorpay_order_id",

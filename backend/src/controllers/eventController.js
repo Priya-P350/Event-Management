@@ -76,12 +76,23 @@ async function createEvent(req, res, next) {
 
 async function updateEvent(req, res, next) {
     try {
+        const existing = await dbQuery.getEventById(req.params.id);
+        if (!existing) {
+            return res.status(404).json({ success: false, message: 'Event not found.' });
+        }
+
+        const creatorId = existing.created_by || existing.createdBy;
+        if (req.user && req.user.role !== 'super_admin' && creatorId !== req.user.id) {
+            return res.status(403).json({
+                success: false,
+                message: 'Forbidden. You do not have permission to modify this event.'
+            });
+        }
+
         const { iti_trade, iti_institute, iti_eligibility, description, ...otherBody } = req.body;
         let updates = { ...otherBody };
 
         if (description !== undefined || iti_trade !== undefined || iti_institute !== undefined || iti_eligibility !== undefined) {
-            // Fetch existing to preserve or update description
-            const existing = await dbQuery.getEventById(req.params.id);
             let baseDesc = description !== undefined ? description : (existing ? existing.description : '');
             
             let trade = iti_trade !== undefined ? iti_trade : (existing ? existing.iti_trade : '');
@@ -106,6 +117,19 @@ async function updateEvent(req, res, next) {
 
 async function deleteEvent(req, res, next) {
     try {
+        const existing = await dbQuery.getEventById(req.params.id);
+        if (!existing) {
+            return res.status(404).json({ success: false, message: 'Event not found.' });
+        }
+
+        const creatorId = existing.created_by || existing.createdBy;
+        if (req.user && req.user.role !== 'super_admin' && creatorId !== req.user.id) {
+            return res.status(403).json({
+                success: false,
+                message: 'Forbidden. You do not have permission to cancel or delete this event.'
+            });
+        }
+
         await dbQuery.updateEvent(req.params.id, { status: 'cancelled' });
         res.json({ success: true, message: 'Event cancelled successfully.' });
     } catch (err) {

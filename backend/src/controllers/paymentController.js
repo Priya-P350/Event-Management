@@ -49,12 +49,22 @@ async function verifyPayment(req, res, next) {
         // Update registration status to confirmed via Drizzle ORM
         await dbQuery.updateRegistrationStatus(registrationId, 'confirmed');
 
-        // Generate Ticket & QR Code with Details and Unique ID
-        const { secureToken, ticketNumber, qrPayload } = generateTicketToken({
+        // Fetch event info from database for ticket and email
+        const event = registration.event || await dbQuery.getEventById(registration.event_id);
+
+        // Generate Ticket & QR Code with Full Details and Unique ID
+        const { secureToken, ticketNumber, verificationString, qrPayload } = generateTicketToken({
             guestName: registration.guest_name,
             guestEmail: registration.guest_email,
             guestPhone: registration.guest_phone,
-            eventId: registration.event_id
+            registrationNumber: registration.registration_number,
+            eventId: registration.event_id,
+            eventTitle: event ? event.title : 'Event',
+            eventDate: event ? event.event_date : '',
+            startTime: event ? event.start_time : '',
+            venue: event ? event.venue : '',
+            address: event ? event.address : '',
+            customAnswers: registration.custom_answers || {}
         });
         const qrCodeDataUrl = await generateQRCodeDataUrl(qrPayload);
 
@@ -71,13 +81,12 @@ async function verifyPayment(req, res, next) {
 
         const createdTicket = await dbQuery.createTicket(ticketData);
 
-        // Fetch event info for email
-        const event = registration.event || await dbQuery.getEventById(registration.event_id);
-
-        // Trigger Black & Slate HTML email ticket
+        // Trigger Black & Slate HTML email ticket via Resend with QR attachment
         sendQRTicketEmail({
             guestEmail: registration.guest_email,
             guestName: registration.guest_name,
+            guestPhone: registration.guest_phone,
+            registrationNumber: registration.registration_number,
             eventTitle: event ? event.title : 'Event',
             eventDate: event ? event.event_date : '',
             startTime: event ? event.start_time : '',
@@ -85,7 +94,9 @@ async function verifyPayment(req, res, next) {
             address: event ? event.address : '',
             ticketNumber,
             secureToken,
-            qrCodeDataUrl
+            verificationString,
+            qrCodeDataUrl,
+            customAnswers: registration.custom_answers || {}
         }).catch(err => console.error('[Email Dispatch Error]', err));
 
         res.json({
@@ -94,7 +105,8 @@ async function verifyPayment(req, res, next) {
             ticket: createdTicket,
             registrationId,
             ticketNumber,
-            secureToken
+            secureToken,
+            verificationString
         });
     } catch (err) {
         next(err);
@@ -145,8 +157,23 @@ async function handleWebhook(req, res, next) {
                     // Update registration via Drizzle ORM
                     await dbQuery.updateRegistrationStatus(reg.id, 'confirmed');
 
-                    // Generate ticket
-                    const { secureToken, ticketNumber, qrPayload } = generateTicketToken();
+                    // Fetch event info from database for ticket and email
+                    const event = reg.event || await dbQuery.getEventById(reg.event_id);
+
+                    // Generate ticket with complete guest and event details
+                    const { secureToken, ticketNumber, verificationString, qrPayload } = generateTicketToken({
+                        guestName: reg.guest_name,
+                        guestEmail: reg.guest_email,
+                        guestPhone: reg.guest_phone,
+                        registrationNumber: reg.registration_number,
+                        eventId: reg.event_id,
+                        eventTitle: event ? event.title : 'Event',
+                        eventDate: event ? event.event_date : '',
+                        startTime: event ? event.start_time : '',
+                        venue: event ? event.venue : '',
+                        address: event ? event.address : '',
+                        customAnswers: reg.custom_answers || {}
+                    });
                     const qrCodeDataUrl = await generateQRCodeDataUrl(qrPayload);
 
                     await dbQuery.createTicket({
@@ -160,10 +187,11 @@ async function handleWebhook(req, res, next) {
                         status: 'active'
                     });
 
-                    const event = reg.event || await dbQuery.getEventById(reg.event_id);
                     sendQRTicketEmail({
                         guestEmail: reg.guest_email,
                         guestName: reg.guest_name,
+                        guestPhone: reg.guest_phone,
+                        registrationNumber: reg.registration_number,
                         eventTitle: event ? event.title : 'Event',
                         eventDate: event ? event.event_date : '',
                         startTime: event ? event.start_time : '',
@@ -171,7 +199,9 @@ async function handleWebhook(req, res, next) {
                         address: event ? event.address : '',
                         ticketNumber,
                         secureToken,
-                        qrCodeDataUrl
+                        verificationString,
+                        qrCodeDataUrl,
+                        customAnswers: reg.custom_answers || {}
                     }).catch(e => console.error('[Webhook Email Error]', e));
                 }
             }

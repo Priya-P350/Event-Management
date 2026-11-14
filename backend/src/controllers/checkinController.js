@@ -287,6 +287,19 @@ async function scanTicket(req, res, next) {
 async function getEventAttendance(req, res, next) {
     try {
         const eventId = req.params.id;
+        const event = await dbQuery.getEventById(eventId);
+        if (!event) {
+            return res.status(404).json({ success: false, message: 'Event not found.' });
+        }
+
+        const creatorId = event.created_by || event.createdBy;
+        if (req.user && req.user.role !== 'super_admin' && creatorId !== req.user.id) {
+            return res.status(403).json({
+                success: false,
+                message: 'Forbidden. You do not have permission to view attendance for this event.'
+            });
+        }
+
         const attendanceList = await dbQuery.getEventAttendance(eventId);
         res.json({ success: true, count: attendanceList.length, attendance: attendanceList });
     } catch (err) {

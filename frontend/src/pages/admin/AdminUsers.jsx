@@ -149,13 +149,13 @@ export const AdminUsers = () => {
   const getRoleBadgeStyle = (role) => {
     switch(role) {
       case 'super_admin':
-        return 'bg-[#0B2B26] text-[#DAF1DE] border-[#8EB69B]';
+        return 'bg-[#041124] text-[#e0f2fe] border-[#94b8d6]';
       case 'event_admin':
-        return 'bg-[#163832] text-[#DAF1DE] border-[#235347]';
+        return 'bg-[#0c2c52] text-[#e0f2fe] border-[#071d38]';
       case 'scanner_staff':
-        return 'bg-[#235347] text-[#DAF1DE] border-[#8EB69B]';
+        return 'bg-[#071d38] text-[#e0f2fe] border-[#94b8d6]';
       default:
-        return 'bg-[#051F20] text-[#8EB69B] border-[#163832]';
+        return 'bg-[#020817] text-[#94b8d6] border-[#0c2c52]';
     }
   };
 
@@ -165,11 +165,11 @@ export const AdminUsers = () => {
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-[#DAF1DE] flex items-center gap-2">
-            <Users className="w-6 h-6 text-[#DAF1DE]" />
+          <h1 className="text-2xl font-bold text-[#e0f2fe] flex items-center gap-2">
+            <Users className="w-6 h-6 text-[#e0f2fe]" />
             User & Member QR Pass Directory
           </h1>
-          <p className="text-xs text-[#8EB69B]">
+          <p className="text-xs text-[#94b8d6]">
             Manage registered members, inspect individual QR passes with unique IDs, and review pass expiration states
           </p>
         </div>
@@ -177,7 +177,7 @@ export const AdminUsers = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={fetchUsers}
-            className="p-2.5 rounded-xl bg-[#0B2B26] text-[#8EB69B] hover:text-[#DAF1DE] border border-[#163832] hover:border-[#8EB69B] transition-all cursor-pointer"
+            className="p-2.5 rounded-xl bg-[#041124] text-[#94b8d6] hover:text-[#e0f2fe] border border-[#0c2c52] hover:border-[#94b8d6] transition-all cursor-pointer"
             title="Refresh Directory"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -185,7 +185,7 @@ export const AdminUsers = () => {
 
           <button
             onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2.5 rounded-xl bg-[#DAF1DE] text-[#051F20] font-extrabold text-xs hover:bg-[#8EB69B] transition-all flex items-center gap-2 border border-[#DAF1DE] shadow-md cursor-pointer"
+            className="px-4 py-2.5 rounded-xl bg-[#e0f2fe] text-[#020817] font-extrabold text-xs hover:bg-[#94b8d6] transition-all flex items-center gap-2 border border-[#e0f2fe] shadow-md cursor-pointer"
           >
             <UserPlus className="w-4 h-4" />
             Add User / Member
@@ -199,88 +199,88 @@ export const AdminUsers = () => {
           onClick={() => setSelectedRole('all')}
           className={`p-4 rounded-2xl border transition-all cursor-pointer ${
             selectedRole === 'all' 
-              ? 'bg-[#0B2B26] border-[#DAF1DE] shadow-md ring-1 ring-[#DAF1DE]' 
-              : 'bg-[#0B2B26]/60 border-[#163832] hover:border-[#8EB69B]'
+              ? 'bg-[#041124] border-[#e0f2fe] shadow-md ring-1 ring-[#e0f2fe]' 
+              : 'bg-[#041124]/60 border-[#0c2c52] hover:border-[#94b8d6]'
           }`}
         >
-          <div className="text-[11px] font-semibold text-[#8EB69B] uppercase tracking-wider">Total Members</div>
-          <div className="text-2xl font-black text-[#DAF1DE] mt-1">{totalCount}</div>
-          <div className="text-[10px] text-[#8EB69B] mt-1">All accounts</div>
+          <div className="text-[11px] font-semibold text-[#94b8d6] uppercase tracking-wider">Total Members</div>
+          <div className="text-2xl font-black text-[#e0f2fe] mt-1">{totalCount}</div>
+          <div className="text-[10px] text-[#94b8d6] mt-1">All accounts</div>
         </div>
 
         <div 
           onClick={() => setSelectedRole('super_admin')}
           className={`p-4 rounded-2xl border transition-all cursor-pointer ${
             selectedRole === 'super_admin' 
-              ? 'bg-[#163832] border-[#DAF1DE] ring-1 ring-[#DAF1DE]' 
-              : 'bg-[#0B2B26]/60 border-[#163832] hover:border-[#8EB69B]'
+              ? 'bg-[#0c2c52] border-[#e0f2fe] ring-1 ring-[#e0f2fe]' 
+              : 'bg-[#041124]/60 border-[#0c2c52] hover:border-[#94b8d6]'
           }`}
         >
-          <div className="text-[11px] font-semibold text-[#DAF1DE] uppercase tracking-wider flex items-center gap-1">
-            <ShieldCheck className="w-3 h-3 text-[#DAF1DE]" /> Super Admin
+          <div className="text-[11px] font-semibold text-[#e0f2fe] uppercase tracking-wider flex items-center gap-1">
+            <ShieldCheck className="w-3 h-3 text-[#e0f2fe]" /> Super Admin
           </div>
-          <div className="text-2xl font-black text-[#DAF1DE] mt-1">{superAdminCount}</div>
-          <div className="text-[10px] text-[#8EB69B] mt-1">Global admins</div>
+          <div className="text-2xl font-black text-[#e0f2fe] mt-1">{superAdminCount}</div>
+          <div className="text-[10px] text-[#94b8d6] mt-1">Global admins</div>
         </div>
 
         <div 
           onClick={() => setSelectedRole('event_admin')}
           className={`p-4 rounded-2xl border transition-all cursor-pointer ${
             selectedRole === 'event_admin' 
-              ? 'bg-[#163832] border-[#DAF1DE] ring-1 ring-[#DAF1DE]' 
-              : 'bg-[#0B2B26]/60 border-[#163832] hover:border-[#8EB69B]'
+              ? 'bg-[#0c2c52] border-[#e0f2fe] ring-1 ring-[#e0f2fe]' 
+              : 'bg-[#041124]/60 border-[#0c2c52] hover:border-[#94b8d6]'
           }`}
         >
-          <div className="text-[11px] font-semibold text-[#DAF1DE] uppercase tracking-wider flex items-center gap-1">
-            <ShieldCheck className="w-3 h-3 text-[#DAF1DE]" /> Organizers
+          <div className="text-[11px] font-semibold text-[#e0f2fe] uppercase tracking-wider flex items-center gap-1">
+            <ShieldCheck className="w-3 h-3 text-[#e0f2fe]" /> Organizers
           </div>
-          <div className="text-2xl font-black text-[#DAF1DE] mt-1">{eventAdminCount}</div>
-          <div className="text-[10px] text-[#8EB69B] mt-1">Event admins</div>
+          <div className="text-2xl font-black text-[#e0f2fe] mt-1">{eventAdminCount}</div>
+          <div className="text-[10px] text-[#94b8d6] mt-1">Event admins</div>
         </div>
 
         <div 
           onClick={() => setSelectedRole('scanner_staff')}
           className={`p-4 rounded-2xl border transition-all cursor-pointer ${
             selectedRole === 'scanner_staff' 
-              ? 'bg-[#163832] border-[#DAF1DE] ring-1 ring-[#DAF1DE]' 
-              : 'bg-[#0B2B26]/60 border-[#163832] hover:border-[#8EB69B]'
+              ? 'bg-[#0c2c52] border-[#e0f2fe] ring-1 ring-[#e0f2fe]' 
+              : 'bg-[#041124]/60 border-[#0c2c52] hover:border-[#94b8d6]'
           }`}
         >
-          <div className="text-[11px] font-semibold text-[#DAF1DE] uppercase tracking-wider flex items-center gap-1">
-            <QrCode className="w-3 h-3 text-[#DAF1DE]" /> Gate Staff
+          <div className="text-[11px] font-semibold text-[#e0f2fe] uppercase tracking-wider flex items-center gap-1">
+            <QrCode className="w-3 h-3 text-[#e0f2fe]" /> Gate Staff
           </div>
-          <div className="text-2xl font-black text-[#DAF1DE] mt-1">{staffCount}</div>
-          <div className="text-[10px] text-[#8EB69B] mt-1">Scanner staff</div>
+          <div className="text-2xl font-black text-[#e0f2fe] mt-1">{staffCount}</div>
+          <div className="text-[10px] text-[#94b8d6] mt-1">Scanner staff</div>
         </div>
 
         <div 
           onClick={() => setSelectedRole('guest')}
           className={`p-4 rounded-2xl border transition-all cursor-pointer col-span-2 sm:col-span-1 ${
             selectedRole === 'guest' 
-              ? 'bg-[#163832] border-[#DAF1DE] ring-1 ring-[#DAF1DE]' 
-              : 'bg-[#0B2B26]/60 border-[#163832] hover:border-[#8EB69B]'
+              ? 'bg-[#0c2c52] border-[#e0f2fe] ring-1 ring-[#e0f2fe]' 
+              : 'bg-[#041124]/60 border-[#0c2c52] hover:border-[#94b8d6]'
           }`}
         >
-          <div className="text-[11px] font-semibold text-[#DAF1DE] uppercase tracking-wider flex items-center gap-1">
-            <UserCheck className="w-3 h-3 text-[#DAF1DE]" /> Attendees
+          <div className="text-[11px] font-semibold text-[#e0f2fe] uppercase tracking-wider flex items-center gap-1">
+            <UserCheck className="w-3 h-3 text-[#e0f2fe]" /> Attendees
           </div>
-          <div className="text-2xl font-black text-[#DAF1DE] mt-1">{guestCount}</div>
-          <div className="text-[10px] text-[#8EB69B] mt-1">Registered members</div>
+          <div className="text-2xl font-black text-[#e0f2fe] mt-1">{guestCount}</div>
+          <div className="text-[10px] text-[#94b8d6] mt-1">Registered members</div>
         </div>
       </div>
 
       {/* Controls Toolbar: Search & Filters */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-[#0B2B26]/70 p-4 rounded-2xl border border-[#163832] backdrop-blur-md">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-[#041124]/70 p-4 rounded-2xl border border-[#0c2c52] backdrop-blur-md">
         
         {/* Search Bar */}
         <div className="relative flex-1">
-          <Search className="w-4 h-4 text-[#8EB69B] absolute left-3.5 top-3.5" />
+          <Search className="w-4 h-4 text-[#94b8d6] absolute left-3.5 top-3.5" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by member name, email, phone, or unique ID..."
-            className="w-full bg-[#051F20] border border-[#163832] rounded-xl pl-10 pr-4 py-2.5 text-xs text-[#DAF1DE] placeholder-[#8EB69B]/60 focus:outline-none focus:border-[#8EB69B] transition-colors"
+            className="w-full bg-[#020817] border border-[#0c2c52] rounded-xl pl-10 pr-4 py-2.5 text-xs text-[#e0f2fe] placeholder-[#94b8d6]/60 focus:outline-none focus:border-[#94b8d6] transition-colors"
           />
         </div>
 
@@ -298,8 +298,8 @@ export const AdminUsers = () => {
               onClick={() => setSelectedRole(tab.id)}
               className={`px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                 selectedRole === tab.id
-                  ? 'bg-[#DAF1DE] text-[#051F20] border border-[#DAF1DE] font-bold shadow-sm'
-                  : 'text-[#8EB69B] hover:text-[#DAF1DE] hover:bg-[#163832] border border-transparent'
+                  ? 'bg-[#e0f2fe] text-[#020817] border border-[#e0f2fe] font-bold shadow-sm'
+                  : 'text-[#94b8d6] hover:text-[#e0f2fe] hover:bg-[#0c2c52] border border-transparent'
               }`}
             >
               {tab.label}
@@ -309,23 +309,23 @@ export const AdminUsers = () => {
       </div>
 
       {/* Users Table */}
-      <div className="bg-[#0B2B26]/85 rounded-3xl border border-[#163832] overflow-hidden shadow-xl backdrop-blur-sm">
+      <div className="bg-[#041124]/85 rounded-3xl border border-[#0c2c52] overflow-hidden shadow-xl backdrop-blur-sm">
         {loading ? (
           <div className="py-20 text-center space-y-3">
-            <RefreshCw className="w-8 h-8 text-[#DAF1DE] animate-spin mx-auto" />
-            <p className="text-xs text-[#8EB69B]">Loading user & pass database...</p>
+            <RefreshCw className="w-8 h-8 text-[#e0f2fe] animate-spin mx-auto" />
+            <p className="text-xs text-[#94b8d6]">Loading user & pass database...</p>
           </div>
         ) : filteredUsers.length === 0 ? (
           <div className="py-16 text-center space-y-3">
-            <Users className="w-12 h-12 text-[#8EB69B]/40 mx-auto" />
-            <p className="text-sm text-[#DAF1DE] font-semibold">No users matching filter criteria</p>
-            <p className="text-xs text-[#8EB69B]">Try adjusting your search query or role filter.</p>
+            <Users className="w-12 h-12 text-[#94b8d6]/40 mx-auto" />
+            <p className="text-sm text-[#e0f2fe] font-semibold">No users matching filter criteria</p>
+            <p className="text-xs text-[#94b8d6]">Try adjusting your search query or role filter.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b border-[#163832] bg-[#051F20] text-[#8EB69B] font-semibold uppercase tracking-wider text-[10px]">
+                <tr className="border-b border-[#0c2c52] bg-[#020817] text-[#94b8d6] font-semibold uppercase tracking-wider text-[10px]">
                   <th className="py-4 px-6">Member Details</th>
                   <th className="py-4 px-6">Unique ID (On QR)</th>
                   <th className="py-4 px-6">QR Pass Status</th>
@@ -333,32 +333,32 @@ export const AdminUsers = () => {
                   <th className="py-4 px-6 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#163832] bg-[#0B2B26]/50">
+              <tbody className="divide-y divide-[#0c2c52] bg-[#041124]/50">
                 {filteredUsers.map((u) => {
                   const isCurrent = u.id === currentUser?.id;
                   const isExpired = u.qr_status === 'expired';
                   const uniqueId = u.member_id || u.memberId || `MEM-${u.id?.slice(0, 8)}`;
 
                   return (
-                    <tr key={u.id} className="hover:bg-[#163832]/50 transition-colors">
+                    <tr key={u.id} className="hover:bg-[#0c2c52]/50 transition-colors">
                       
                       {/* Name & Email */}
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-[#DAF1DE] text-[#051F20] font-black flex items-center justify-center text-sm shadow-md">
+                          <div className="w-10 h-10 rounded-xl bg-[#e0f2fe] text-[#020817] font-black flex items-center justify-center text-sm shadow-md">
                             {u.name?.charAt(0).toUpperCase() || 'U'}
                           </div>
                           <div>
-                            <div className="font-bold text-[#DAF1DE] flex items-center gap-2">
+                            <div className="font-bold text-[#e0f2fe] flex items-center gap-2">
                               {u.name}
                               {isCurrent && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#051F20] text-[#DAF1DE] border border-[#163832] font-mono">
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#020817] text-[#e0f2fe] border border-[#0c2c52] font-mono">
                                   You
                                 </span>
                               )}
                             </div>
-                            <div className="text-[11px] text-[#8EB69B] flex items-center gap-1">
-                              <Mail className="w-3 h-3 text-[#8EB69B]" /> {u.email}
+                            <div className="text-[11px] text-[#94b8d6] flex items-center gap-1">
+                              <Mail className="w-3 h-3 text-[#94b8d6]" /> {u.email}
                             </div>
                           </div>
                         </div>
@@ -366,7 +366,7 @@ export const AdminUsers = () => {
 
                       {/* Unique Member ID */}
                       <td className="py-4 px-6">
-                        <span className="font-mono font-bold text-xs text-[#DAF1DE] bg-[#051F20] px-2.5 py-1 rounded-lg border border-[#163832]">
+                        <span className="font-mono font-bold text-xs text-[#e0f2fe] bg-[#020817] px-2.5 py-1 rounded-lg border border-[#0c2c52]">
                           {uniqueId}
                         </span>
                       </td>
@@ -392,10 +392,10 @@ export const AdminUsers = () => {
                           onChange={(e) => handleRoleChange(u.id, e.target.value)}
                           className={`px-3 py-1.5 rounded-xl border text-xs font-semibold focus:outline-none transition-all cursor-pointer ${getRoleBadgeStyle(u.role)}`}
                         >
-                          <option value="guest" className="bg-[#051F20] text-[#DAF1DE]">🎟️ Guest Attendee</option>
-                          <option value="scanner_staff" className="bg-[#051F20] text-[#DAF1DE]">📷 Scanner Staff</option>
-                          <option value="event_admin" className="bg-[#051F20] text-[#DAF1DE]">🛡️ Event Admin</option>
-                          <option value="super_admin" className="bg-[#051F20] text-[#DAF1DE]">👑 Super Admin</option>
+                          <option value="guest" className="bg-[#020817] text-[#e0f2fe]">🎟️ Guest Attendee</option>
+                          <option value="scanner_staff" className="bg-[#020817] text-[#e0f2fe]">📷 Scanner Staff</option>
+                          <option value="event_admin" className="bg-[#020817] text-[#e0f2fe]">🛡️ Event Admin</option>
+                          <option value="super_admin" className="bg-[#020817] text-[#e0f2fe]">👑 Super Admin</option>
                         </select>
                       </td>
 
@@ -404,7 +404,7 @@ export const AdminUsers = () => {
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => setViewingQrUser(u)}
-                            className="px-3 py-1.5 rounded-xl bg-[#DAF1DE] text-[#051F20] font-bold text-xs flex items-center gap-1.5 hover:bg-[#8EB69B] transition-all cursor-pointer shadow-sm"
+                            className="px-3 py-1.5 rounded-xl bg-[#e0f2fe] text-[#020817] font-bold text-xs flex items-center gap-1.5 hover:bg-[#94b8d6] transition-all cursor-pointer shadow-sm"
                             title="Inspect Member QR Pass"
                           >
                             <QrCode className="w-3.5 h-3.5" /> View Pass
@@ -434,29 +434,29 @@ export const AdminUsers = () => {
       {/* MODAL: VIEW MEMBER QR PASS */}
       {viewingQrUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-          <div className="bg-[#0B2B26] max-w-md w-full p-6 sm:p-8 rounded-3xl border border-[#163832] space-y-6 animate-in fade-in zoom-in duration-200 shadow-2xl relative">
+          <div className="bg-[#041124] max-w-md w-full p-6 sm:p-8 rounded-3xl border border-[#0c2c52] space-y-6 animate-in fade-in zoom-in duration-200 shadow-2xl relative">
             
-            <div className="flex items-center justify-between border-b border-[#163832] pb-4">
+            <div className="flex items-center justify-between border-b border-[#0c2c52] pb-4">
               <div className="flex items-center gap-2">
-                <span className="p-1.5 rounded-lg bg-[#DAF1DE]/20 text-[#DAF1DE]">
+                <span className="p-1.5 rounded-lg bg-[#e0f2fe]/20 text-[#e0f2fe]">
                   <Sparkles className="w-4 h-4" />
                 </span>
                 <div>
-                  <h3 className="text-base font-bold text-[#DAF1DE]">Member Digital Pass</h3>
-                  <p className="text-[11px] text-[#8EB69B]">Single-use Admission Pass</p>
+                  <h3 className="text-base font-bold text-[#e0f2fe]">Member Digital Pass</h3>
+                  <p className="text-[11px] text-[#94b8d6]">Single-use Admission Pass</p>
                 </div>
               </div>
               <button
                 onClick={() => setViewingQrUser(null)}
-                className="p-1.5 rounded-xl text-[#8EB69B] hover:text-[#DAF1DE] hover:bg-[#163832] cursor-pointer"
+                className="p-1.5 rounded-xl text-[#94b8d6] hover:text-[#e0f2fe] hover:bg-[#0c2c52] cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* QR Card */}
-            <div className="bg-[#051F20] p-6 rounded-2xl border border-[#163832] text-center space-y-4">
-              <div className="inline-block p-4 bg-white rounded-2xl border-4 border-[#8EB69B] relative shadow-xl">
+            <div className="bg-[#020817] p-6 rounded-2xl border border-[#0c2c52] text-center space-y-4">
+              <div className="inline-block p-4 bg-white rounded-2xl border-4 border-[#94b8d6] relative shadow-xl">
                 {viewingQrUser.qr_code_data ? (
                   <img
                     src={viewingQrUser.qr_code_data}
@@ -479,10 +479,10 @@ export const AdminUsers = () => {
               </div>
 
               <div>
-                <span className="text-[10px] text-[#8EB69B] uppercase font-bold tracking-wider block">
+                <span className="text-[10px] text-[#94b8d6] uppercase font-bold tracking-wider block">
                   Unique Member ID (Mentioned on QR)
                 </span>
-                <span className="font-mono text-base font-black text-[#DAF1DE] tracking-widest">
+                <span className="font-mono text-base font-black text-[#e0f2fe] tracking-widest">
                   {viewingQrUser.member_id || viewingQrUser.memberId || `MEM-${viewingQrUser.id?.slice(0, 8)}`}
                 </span>
               </div>
@@ -502,29 +502,29 @@ export const AdminUsers = () => {
             </div>
 
             {/* Member Details */}
-            <div className="bg-[#051F20]/70 p-4 rounded-xl border border-[#163832] text-xs space-y-2">
+            <div className="bg-[#020817]/70 p-4 rounded-xl border border-[#0c2c52] text-xs space-y-2">
               <div className="flex justify-between">
-                <span className="text-[#8EB69B]">Member Name:</span>
-                <span className="font-bold text-[#DAF1DE]">{viewingQrUser.name}</span>
+                <span className="text-[#94b8d6]">Member Name:</span>
+                <span className="font-bold text-[#e0f2fe]">{viewingQrUser.name}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[#8EB69B]">Email Address:</span>
-                <span className="font-mono text-[#DAF1DE]">{viewingQrUser.email}</span>
+                <span className="text-[#94b8d6]">Email Address:</span>
+                <span className="font-mono text-[#e0f2fe]">{viewingQrUser.email}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[#8EB69B]">Role:</span>
-                <span className="font-bold uppercase text-[#DAF1DE]">{viewingQrUser.role}</span>
+                <span className="text-[#94b8d6]">Role:</span>
+                <span className="font-bold uppercase text-[#e0f2fe]">{viewingQrUser.role}</span>
               </div>
               {viewingQrUser.qr_scanned_at && (
-                <div className="flex justify-between border-t border-[#163832] pt-2 text-[11px]">
+                <div className="flex justify-between border-t border-[#0c2c52] pt-2 text-[11px]">
                   <span className="text-rose-400">Scanned & Expired:</span>
-                  <span className="font-mono text-[#DAF1DE]">{new Date(viewingQrUser.qr_scanned_at).toLocaleString()}</span>
+                  <span className="font-mono text-[#e0f2fe]">{new Date(viewingQrUser.qr_scanned_at).toLocaleString()}</span>
                 </div>
               )}
             </div>
 
             {/* Actions: Reset QR */}
-            <div className="flex items-center justify-between gap-3 pt-2 border-t border-[#163832]">
+            <div className="flex items-center justify-between gap-3 pt-2 border-t border-[#0c2c52]">
               {viewingQrUser.qr_status === 'expired' && (
                 <button
                   onClick={() => handleResetUserQr(viewingQrUser.id)}
@@ -537,7 +537,7 @@ export const AdminUsers = () => {
               )}
               <button
                 onClick={() => setViewingQrUser(null)}
-                className="ml-auto px-5 py-2.5 rounded-xl bg-[#DAF1DE] text-[#051F20] font-black text-xs hover:bg-[#8EB69B] cursor-pointer"
+                className="ml-auto px-5 py-2.5 rounded-xl bg-[#e0f2fe] text-[#020817] font-black text-xs hover:bg-[#94b8d6] cursor-pointer"
               >
                 Close
               </button>
@@ -550,21 +550,21 @@ export const AdminUsers = () => {
       {/* Modal: Create User / Admin */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="bg-[#0B2B26] max-w-md w-full p-6 sm:p-8 rounded-3xl border border-[#163832] space-y-6 animate-in fade-in zoom-in duration-200 shadow-2xl">
+          <div className="bg-[#041124] max-w-md w-full p-6 sm:p-8 rounded-3xl border border-[#0c2c52] space-y-6 animate-in fade-in zoom-in duration-200 shadow-2xl">
             
-            <div className="flex items-center justify-between border-b border-[#163832] pb-4">
+            <div className="flex items-center justify-between border-b border-[#0c2c52] pb-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#DAF1DE] text-[#051F20] flex items-center justify-center font-bold">
+                <div className="w-10 h-10 rounded-xl bg-[#e0f2fe] text-[#020817] flex items-center justify-center font-bold">
                   <UserPlus className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-[#DAF1DE]">Add New Member or Admin</h3>
-                  <p className="text-xs text-[#8EB69B]">Auto-generates admission QR pass with unique ID</p>
+                  <h3 className="text-lg font-bold text-[#e0f2fe]">Add New Member or Admin</h3>
+                  <p className="text-xs text-[#94b8d6]">Auto-generates admission QR pass with unique ID</p>
                 </div>
               </div>
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="p-2 rounded-xl text-[#8EB69B] hover:text-[#DAF1DE] hover:bg-[#163832] cursor-pointer"
+                className="p-2 rounded-xl text-[#94b8d6] hover:text-[#e0f2fe] hover:bg-[#0c2c52] cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -572,42 +572,42 @@ export const AdminUsers = () => {
 
             <form onSubmit={handleCreateSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-[#DAF1DE] mb-1">Full Name</label>
+                <label className="block text-xs font-semibold text-[#e0f2fe] mb-1">Full Name</label>
                 <input
                   type="text"
                   required
                   value={createForm.name}
                   onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
                   placeholder="e.g. Alex Morgan"
-                  className="w-full bg-[#051F20] border border-[#163832] rounded-xl px-4 py-3 text-xs text-[#DAF1DE] placeholder-[#8EB69B]/50 focus:outline-none focus:border-[#8EB69B]"
+                  className="w-full bg-[#020817] border border-[#0c2c52] rounded-xl px-4 py-3 text-xs text-[#e0f2fe] placeholder-[#94b8d6]/50 focus:outline-none focus:border-[#94b8d6]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-[#DAF1DE] mb-1">Email Address</label>
+                <label className="block text-xs font-semibold text-[#e0f2fe] mb-1">Email Address</label>
                 <input
                   type="email"
                   required
                   value={createForm.email}
                   onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
                   placeholder="alex@company.com"
-                  className="w-full bg-[#051F20] border border-[#163832] rounded-xl px-4 py-3 text-xs text-[#DAF1DE] placeholder-[#8EB69B]/50 focus:outline-none focus:border-[#8EB69B]"
+                  className="w-full bg-[#020817] border border-[#0c2c52] rounded-xl px-4 py-3 text-xs text-[#e0f2fe] placeholder-[#94b8d6]/50 focus:outline-none focus:border-[#94b8d6]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-[#DAF1DE] mb-1">Phone Number</label>
+                <label className="block text-xs font-semibold text-[#e0f2fe] mb-1">Phone Number</label>
                 <input
                   type="tel"
                   value={createForm.phone}
                   onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
                   placeholder="+91 9876543210"
-                  className="w-full bg-[#051F20] border border-[#163832] rounded-xl px-4 py-3 text-xs text-[#DAF1DE] placeholder-[#8EB69B]/50 focus:outline-none focus:border-[#8EB69B]"
+                  className="w-full bg-[#020817] border border-[#0c2c52] rounded-xl px-4 py-3 text-xs text-[#e0f2fe] placeholder-[#94b8d6]/50 focus:outline-none focus:border-[#94b8d6]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-[#DAF1DE] mb-1">Password</label>
+                <label className="block text-xs font-semibold text-[#e0f2fe] mb-1">Password</label>
                 <input
                   type="password"
                   required
@@ -615,16 +615,16 @@ export const AdminUsers = () => {
                   value={createForm.password}
                   onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
                   placeholder="••••••••"
-                  className="w-full bg-[#051F20] border border-[#163832] rounded-xl px-4 py-3 text-xs text-[#DAF1DE] placeholder-[#8EB69B]/50 focus:outline-none focus:border-[#8EB69B]"
+                  className="w-full bg-[#020817] border border-[#0c2c52] rounded-xl px-4 py-3 text-xs text-[#e0f2fe] placeholder-[#94b8d6]/50 focus:outline-none focus:border-[#94b8d6]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-[#DAF1DE] mb-1">Assigned Role</label>
+                <label className="block text-xs font-semibold text-[#e0f2fe] mb-1">Assigned Role</label>
                 <select
                   value={createForm.role}
                   onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
-                  className="w-full bg-[#051F20] border border-[#163832] rounded-xl px-4 py-3 text-xs text-[#DAF1DE] focus:outline-none focus:border-[#8EB69B]"
+                  className="w-full bg-[#020817] border border-[#0c2c52] rounded-xl px-4 py-3 text-xs text-[#e0f2fe] focus:outline-none focus:border-[#94b8d6]"
                 >
                   <option value="guest">🎟️ Guest Attendee</option>
                   <option value="scanner_staff">📷 Gate Scanner Staff</option>
@@ -637,14 +637,14 @@ export const AdminUsers = () => {
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#8EB69B] hover:text-[#DAF1DE] bg-[#051F20] border border-[#163832] cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#94b8d6] hover:text-[#e0f2fe] bg-[#020817] border border-[#0c2c52] cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={creating}
-                  className="px-5 py-2.5 rounded-xl text-xs font-extrabold text-[#051F20] bg-[#DAF1DE] hover:bg-[#8EB69B] transition-all border border-[#DAF1DE] disabled:opacity-50 cursor-pointer shadow-md"
+                  className="px-5 py-2.5 rounded-xl text-xs font-extrabold text-[#020817] bg-[#e0f2fe] hover:bg-[#94b8d6] transition-all border border-[#e0f2fe] disabled:opacity-50 cursor-pointer shadow-md"
                 >
                   {creating ? 'Creating Account & Pass...' : 'Create Account & Issue QR'}
                 </button>

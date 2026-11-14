@@ -5,7 +5,7 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
-const { eq, and, or, ilike, sql, desc, count, sum } = require('drizzle-orm');
+const { eq, and, or, ilike, sql, desc, count, sum, inArray } = require('drizzle-orm');
 
 const schema = require('../db/schema');
 const mongo = require('./mongo');
@@ -29,7 +29,7 @@ const databaseUrl = process.env.DATABASE_URL || process.env.SUPABASE_DB_URL;
 // Always initialize fallback SQLite or PostgreSQL immediately so drizzleDb is never null
 setupSqliteOrPg();
 
-if (mongoUri || process.env.DB_TYPE === 'mongodb') {
+if (process.env.DB_TYPE !== 'sqlite' && (mongoUri || process.env.DB_TYPE === 'mongodb')) {
     // Connect to MongoDB asynchronously; mode remains sqlite/postgres until mongo is ready
     mongo.connectMongo().then(res => {
         if (res.connected) {
@@ -88,7 +88,8 @@ function initSqliteTables(db) {
             phone TEXT,
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'guest',
-            member_id TEXT,
+            admin_id TEXT UNIQUE,
+            member_id TEXT UNIQUE,
             qr_code_data TEXT,
             qr_token TEXT,
             qr_status TEXT DEFAULT 'active',
@@ -221,8 +222,9 @@ function initSqliteTables(db) {
         );
     `);
 
-    // Ensure users and attendance have member QR columns in existing database
+    // Ensure users and attendance have member QR and admin_id columns in existing database
     const userMigrations = [
+        "ALTER TABLE users ADD COLUMN admin_id TEXT;",
         "ALTER TABLE users ADD COLUMN member_id TEXT;",
         "ALTER TABLE users ADD COLUMN qr_code_data TEXT;",
         "ALTER TABLE users ADD COLUMN qr_token TEXT;",
@@ -237,6 +239,15 @@ function initSqliteTables(db) {
         try { db.exec(sqlStmt); } catch (e) { /* Column already exists */ }
     }
 
+    try {
+        db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_member_id ON users(member_id) WHERE member_id IS NOT NULL AND member_id != '';");
+    } catch (e) {}
+
+    try {
+        db.prepare("UPDATE users SET admin_id = 'ADM-0001' WHERE id = '11111111-1111-1111-1111-111111111111' AND (admin_id IS NULL OR admin_id = '')").run();
+        db.prepare("UPDATE users SET admin_id = 'ADM-0002' WHERE id = '22222222-2222-2222-2222-222222222222' AND (admin_id IS NULL OR admin_id = '')").run();
+    } catch (e) {}
+
     const userCount = db.prepare('SELECT count(*) as count FROM users').get();
     if (userCount.count === 0) {
         seedSqliteData(db);
@@ -249,14 +260,14 @@ function seedSqliteData(db) {
     const staffHash = bcrypt.hashSync('Staff@123', 10);
 
     const insertUser = db.prepare(`
-        INSERT INTO users (id, name, email, phone, password_hash, role) VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO users (id, name, email, phone, password_hash, role, admin_id) VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
-    insertUser.run('11111111-1111-1111-1111-111111111111', 'Global Super Admin', 'admin@eventhub.com', '+91 9876543210', passwordHash, 'super_admin');
-    insertUser.run('22222222-2222-2222-2222-222222222222', 'Event Organizer Admin', 'organizer@eventhub.com', '+91 9876543211', passwordHash, 'event_admin');
-    insertUser.run('33333333-3333-3333-3333-333333333333', 'Scanner Gate Staff', 'staff@eventhub.com', '+91 9876543212', staffHash, 'scanner_staff');
-    insertUser.run('44444444-4444-4444-4444-444444444444', 'Rahul Sharma', 'guest@gmail.com', '+91 9876543213', guestHash, 'guest');
-    insertUser.run('55555555-5555-5555-5555-555555555555', 'Priya Patel', 'priya@gmail.com', '+91 9876543214', guestHash, 'guest');
+    insertUser.run('11111111-1111-1111-1111-111111111111', 'Global Super Admin', 'admin@eventhub.com', '+91 9876543210', passwordHash, 'super_admin', 'ADM-0001');
+    insertUser.run('22222222-2222-2222-2222-222222222222', 'Event Organizer Admin', 'organizer@eventhub.com', '+91 9876543211', passwordHash, 'event_admin', 'ADM-0002');
+    insertUser.run('33333333-3333-3333-3333-333333333333', 'Scanner Gate Staff', 'staff@eventhub.com', '+91 9876543212', staffHash, 'scanner_staff', null);
+    insertUser.run('44444444-4444-4444-4444-444444444444', 'Rahul Sharma', 'guest@gmail.com', '+91 9876543213', guestHash, 'guest', null);
+    insertUser.run('55555555-5555-5555-5555-555555555555', 'Priya Patel', 'priya@gmail.com', '+91 9876543214', guestHash, 'guest', null);
 
     const insertEvent = db.prepare(`
         INSERT INTO events (id, title, description, category, cover_image_url, event_date, start_time, end_time, venue, address, google_maps_url, ticket_price, capacity, registration_open_at, registration_close_at, status, created_by)
@@ -299,20 +310,30 @@ const dbQuery = {
     async findUserByEmailOrPhone(identifier) {
         if (!identifier) return null;
         const clean = identifier.trim().toLowerCase();
+        const upperClean = identifier.trim().toUpperCase();
+        const digitsOnly = clean.replace(/\D/g, '');
 
         if (mode === 'mongodb') {
             try {
-                const u = await mongoModels.User.findOne({
-                    $or: [
-                        { email: clean },
-                        { phone: clean },
-                        { _id: clean }
-                    ]
-                }).lean();
+                const queryConditions = [
+                    { email: clean },
+                    { phone: clean },
+                    { member_id: upperClean },
+                    { admin_id: upperClean },
+                    { _id: clean }
+                ];
+
+                if (digitsOnly.length >= 7) {
+                    queryConditions.push({ phone: { $regex: `${digitsOnly.slice(-10)}$`, $options: 'i' } });
+                }
+
+                const u = await mongoModels.User.findOne({ $or: queryConditions }).lean();
                 if (!u) return null;
                 return {
                     id: u._id,
                     ...u,
+                    admin_id: u.admin_id || null,
+                    adminId: u.admin_id || null,
                     password_hash: u.password_hash
                 };
             } catch (err) {
@@ -322,17 +343,25 @@ const dbQuery = {
 
         const t = getTables();
         try {
-            const results = await drizzleDb.select().from(t.users).where(
-                or(
-                    sql`LOWER(${t.users.email}) = ${clean}`,
-                    sql`LOWER(${t.users.phone}) = ${clean}`,
-                    eq(t.users.id, clean)
-                )
-            );
+            const orConditions = [
+                sql`LOWER(${t.users.email}) = ${clean}`,
+                sql`LOWER(${t.users.phone}) = ${clean}`,
+                sql`UPPER(${t.users.memberId}) = ${upperClean}`,
+                sql`UPPER(${t.users.adminId}) = ${upperClean}`,
+                eq(t.users.id, clean)
+            ];
+
+            if (digitsOnly.length >= 7) {
+                orConditions.push(sql`${t.users.phone} LIKE ${`%${digitsOnly.slice(-10)}%`}`);
+            }
+
+            const results = await drizzleDb.select().from(t.users).where(or(...orConditions));
             if (!results || results.length === 0) return null;
             const u = results[0];
             return {
                 ...u,
+                admin_id: u.adminId || u.admin_id || null,
+                adminId: u.adminId || u.admin_id || null,
                 password_hash: u.passwordHash || u.password_hash
             };
         } catch (err) {
@@ -353,6 +382,8 @@ const dbQuery = {
                     email: u.email,
                     phone: u.phone,
                     role: u.role,
+                    admin_id: u.admin_id || null,
+                    adminId: u.admin_id || null,
                     member_id: u.member_id || null,
                     memberId: u.member_id || null,
                     qr_code_data: u.qr_code_data || '',
@@ -379,6 +410,7 @@ const dbQuery = {
                 email: t.users.email,
                 phone: t.users.phone,
                 role: t.users.role,
+                adminId: t.users.adminId,
                 memberId: t.users.memberId,
                 qrCodeData: t.users.qrCodeData,
                 qrToken: t.users.qrToken,
@@ -392,6 +424,8 @@ const dbQuery = {
             const r = results[0];
             return {
                 ...r,
+                admin_id: r.adminId || null,
+                adminId: r.adminId || null,
                 member_id: r.memberId,
                 qr_code_data: r.qrCodeData || '',
                 qr_token: r.qrToken,
@@ -470,6 +504,30 @@ const dbQuery = {
         } catch (err) {
             return null;
         }
+    },
+
+    async findUserByAdminId(adminId) {
+        if (!adminId) return null;
+        const clean = String(adminId).trim();
+        if (mode === 'mongodb') {
+            const u = await mongoModels.User.findOne({ admin_id: clean }).lean();
+            if (!u) return null;
+            return {
+                id: u._id,
+                ...u,
+                admin_id: u.admin_id,
+                adminId: u.admin_id
+            };
+        }
+        const t = getTables();
+        const results = await drizzleDb.select().from(t.users).where(eq(t.users.adminId, clean));
+        if (!results || results.length === 0) return null;
+        const r = results[0];
+        return {
+            ...r,
+            admin_id: r.adminId,
+            adminId: r.adminId
+        };
     },
 
     async updateUserMemberPass(userId, passData) {
@@ -587,30 +645,36 @@ const dbQuery = {
     },
 
     async createUser(user) {
+        const adminId = user.admin_id || user.adminId || null;
         const memberId = user.member_id || user.memberId || null;
         const qrCodeData = user.qr_code_data || user.qrCodeData || '';
         const qrToken = user.qr_token || user.qrToken || null;
         const qrStatus = user.qr_status || user.qrStatus || 'active';
 
         if (mode === 'mongodb') {
-            const created = await mongoModels.User.create({
+            const userDoc = {
                 _id: user.id || uuidv4(),
                 name: user.name,
                 email: user.email.toLowerCase(),
                 phone: user.phone || '',
                 password_hash: user.password_hash || user.passwordHash,
                 role: user.role || 'guest',
-                member_id: memberId,
                 qr_code_data: qrCodeData,
-                qr_token: qrToken,
                 qr_status: qrStatus
-            });
+            };
+            if (adminId) userDoc.admin_id = adminId;
+            if (memberId) userDoc.member_id = memberId;
+            if (qrToken) userDoc.qr_token = qrToken;
+
+            const created = await mongoModels.User.create(userDoc);
             return {
                 id: created._id,
                 name: created.name,
                 email: created.email,
                 phone: created.phone,
                 role: created.role,
+                admin_id: created.admin_id,
+                adminId: created.admin_id,
                 member_id: created.member_id,
                 memberId: created.member_id,
                 qr_code_data: created.qr_code_data,
@@ -627,6 +691,7 @@ const dbQuery = {
             phone: user.phone || '',
             passwordHash: user.password_hash || user.passwordHash,
             role: user.role || 'guest',
+            adminId: adminId,
             memberId: memberId,
             qrCodeData: qrCodeData,
             qrToken: qrToken,
@@ -635,12 +700,25 @@ const dbQuery = {
         await drizzleDb.insert(t.users).values(val);
         return {
             ...user,
+            admin_id: adminId,
+            adminId: adminId,
             member_id: memberId,
             memberId: memberId,
             qr_code_data: qrCodeData,
             qr_token: qrToken,
             qr_status: qrStatus
         };
+    },
+
+    async updateUserAdminId(userId, adminId) {
+        if (mode === 'mongodb') {
+            await mongoModels.User.updateOne({ _id: userId }, { admin_id: adminId });
+            return this.findUserById(userId);
+        }
+
+        const t = getTables();
+        await drizzleDb.update(t.users).set({ adminId }).where(eq(t.users.id, userId));
+        return this.findUserById(userId);
     },
 
     async getAllUsers(query = {}) {
@@ -666,6 +744,8 @@ const dbQuery = {
                     email: u.email,
                     phone: u.phone,
                     role: u.role,
+                    admin_id: u.admin_id || null,
+                    adminId: u.admin_id || null,
                     member_id: u.member_id || null,
                     memberId: u.member_id || null,
                     qr_code_data: u.qr_code_data || '',
@@ -702,6 +782,7 @@ const dbQuery = {
             email: t.users.email,
             phone: t.users.phone,
             role: t.users.role,
+            adminId: t.users.adminId,
             memberId: t.users.memberId,
             qrCodeData: t.users.qrCodeData,
             qrToken: t.users.qrToken,
@@ -721,6 +802,8 @@ const dbQuery = {
             const regCountRes = await drizzleDb.select({ count: count() }).from(t.registrations).where(eq(t.registrations.userId, u.id));
             return {
                 ...u,
+                admin_id: u.adminId || null,
+                adminId: u.adminId || null,
                 member_id: u.memberId,
                 qr_code_data: u.qrCodeData || '',
                 qr_token: u.qrToken,
@@ -773,6 +856,7 @@ const dbQuery = {
             const filter = {};
             if (query.status) filter.status = query.status;
             if (query.category && query.category !== 'All') filter.category = query.category;
+            if (query.created_by) filter.created_by = query.created_by;
             if (query.search) {
                 const regex = new RegExp(query.search.trim(), 'i');
                 filter.$or = [
@@ -802,7 +886,8 @@ const dbQuery = {
         const t = getTables();
         const conditions = [];
         if (query.status) conditions.push(eq(t.events.status, query.status));
-        if (query.category) conditions.push(eq(t.events.category, query.category));
+        if (query.category && query.category !== 'All') conditions.push(eq(t.events.category, query.category));
+        if (query.created_by) conditions.push(eq(t.events.createdBy, query.created_by));
         if (query.search) {
             const term = `%${query.search}%`;
             conditions.push(or(ilike(t.events.title, term), ilike(t.events.description, term), ilike(t.events.venue, term)));
@@ -1041,7 +1126,7 @@ const dbQuery = {
             guest_phone: reg.guestPhone,
             registration_status: reg.registrationStatus,
             created_at: reg.createdAt,
-            event: events[0] ? { ...events[0], cover_image_url: events[0].coverImageUrl, event_date: events[0].eventDate, start_time: events[0].startTime } : null,
+            event: events[0] ? { ...events[0], cover_image_url: events[0].coverImageUrl, event_date: events[0].eventDate, start_time: events[0].startTime, created_by: events[0].createdBy } : null,
             payment: payments[0] ? { ...payments[0], razorpay_order_id: payments[0].razorpayOrderId } : null,
             ticket: tickets[0] ? { ...tickets[0], secure_token: tickets[0].secureToken } : null
         };
@@ -1216,7 +1301,13 @@ const dbQuery = {
             return {
                 id: ticket._id,
                 ...ticket,
-                event: event ? { id: event._id, title: event.title } : null,
+                event: event ? {
+                    id: event._id,
+                    ...event,
+                    title: event.title,
+                    created_by: event.created_by,
+                    createdBy: event.created_by
+                } : null,
                 registration: reg ? { id: reg._id, ...reg } : null,
                 user: user ? { id: user._id, name: user.name, email: user.email, phone: user.phone } : null,
                 attendance: att ? { id: att._id, ...att } : null
@@ -1224,7 +1315,7 @@ const dbQuery = {
         }
 
         const t = getTables();
-        const tickets = await drizzleDb.select().from(t.tickets).where(or(eq(t.tickets.secureToken, token), eq(t.tickets.ticketNumber, token)));
+        const tickets = await drizzleDb.select().from(t.tickets).where(or(eq(t.tickets.secureToken, token), eq(t.tickets.ticketNumber, token), eq(t.tickets.id, token)));
         if (!tickets || tickets.length === 0) return null;
         const ticket = tickets[0];
 
@@ -1241,7 +1332,12 @@ const dbQuery = {
             ticket_number: ticket.ticketNumber,
             secure_token: ticket.secureToken,
             qr_code_data: ticket.qrCodeData,
-            event: events[0] ? { ...events[0], title: events[0].title } : null,
+            event: events[0] ? {
+                ...events[0],
+                title: events[0].title,
+                created_by: events[0].createdBy,
+                createdBy: events[0].createdBy
+            } : null,
             registration: regs[0] ? {
                 ...regs[0],
                 registration_id: regs[0].id,
@@ -1281,24 +1377,36 @@ const dbQuery = {
                 };
             }
 
-            const checkinRecord = await mongoModels.Attendance.create({
-                _id: uuidv4(),
-                ticket_id: ticketId,
-                event_id: eventId,
-                registration_id: registrationId,
-                checked_in_by: checkedInBy,
-                checked_in_at: new Date().toISOString(),
-                status: 'expired',
-                device_info: deviceInfo
-            });
+            try {
+                const checkinRecord = await mongoModels.Attendance.create({
+                    _id: uuidv4(),
+                    ticket_id: ticketId,
+                    event_id: eventId,
+                    registration_id: registrationId,
+                    checked_in_by: checkedInBy,
+                    checked_in_at: new Date().toISOString(),
+                    status: 'expired',
+                    device_info: deviceInfo
+                });
 
-            // Mark QR ticket as expired upon Admin scanning
-            await mongoModels.Ticket.updateOne({ _id: ticketId }, { status: 'expired' });
+                // Mark QR ticket as expired upon Admin scanning
+                await mongoModels.Ticket.updateOne({ _id: ticketId }, { status: 'expired' });
 
-            return {
-                success: true,
-                attendance: { id: checkinRecord._id, ...checkinRecord.toObject(), status: 'expired' }
-            };
+                return {
+                    success: true,
+                    attendance: { id: checkinRecord._id, ...checkinRecord.toObject(), status: 'expired' }
+                };
+            } catch (err) {
+                if (err.code === 11000 || err.message?.includes('duplicate key') || err.message?.includes('E11000')) {
+                    const existingCheckin = await mongoModels.Attendance.findOne({ ticket_id: ticketId }).lean();
+                    return {
+                        success: false,
+                        reason: 'ALREADY_USED',
+                        existingCheckin: existingCheckin || { checked_in_at: new Date().toISOString() }
+                    };
+                }
+                throw err;
+            }
         }
 
         const t = getTables();
@@ -1327,37 +1435,73 @@ const dbQuery = {
             };
         }
 
-        const attId = uuidv4();
-        await drizzleDb.insert(t.attendance).values({
-            id: attId,
-            ticketId,
-            eventId,
-            registrationId,
-            checkedInBy: checkedInBy || null,
-            status: 'expired',
-            deviceInfo: deviceInfo || 'Gate Scanner'
-        });
-
-        // Mark QR ticket as expired upon Admin scanning
-        await drizzleDb.update(t.tickets).set({ status: 'expired' }).where(eq(t.tickets.id, ticketId));
-
-        return {
-            success: true,
-            attendance: {
+        try {
+            const attId = uuidv4();
+            await drizzleDb.insert(t.attendance).values({
                 id: attId,
-                ticket_id: ticketId,
-                event_id: eventId,
-                registration_id: registrationId,
-                checked_in_at: new Date().toISOString(),
-                status: 'expired'
+                ticketId,
+                eventId,
+                registrationId,
+                checkedInBy: checkedInBy || null,
+                status: 'expired',
+                deviceInfo: deviceInfo || 'Gate Scanner'
+            });
+
+            // Mark QR ticket as expired upon Admin scanning
+            await drizzleDb.update(t.tickets).set({ status: 'expired' }).where(eq(t.tickets.id, ticketId));
+
+            return {
+                success: true,
+                attendance: {
+                    id: attId,
+                    ticket_id: ticketId,
+                    event_id: eventId,
+                    registration_id: registrationId,
+                    checked_in_at: new Date().toISOString(),
+                    status: 'expired'
+                }
+            };
+        } catch (err) {
+            // Feature 6: Handle SQLite/Postgres duplicate attendance constraint collisions gracefully
+            const isUniqueConstraint =
+                err.code === 'SQLITE_CONSTRAINT' ||
+                err.code === 'SQLITE_CONSTRAINT_UNIQUE' ||
+                err.code === '23505' ||
+                (err.message && (
+                    err.message.includes('UNIQUE constraint failed') ||
+                    err.message.includes('unique constraint') ||
+                    err.message.includes('attendance.ticket_id') ||
+                    err.message.includes('duplicate key')
+                ));
+
+            if (isUniqueConstraint) {
+                const existingAgain = await drizzleDb.select().from(t.attendance).where(eq(t.attendance.ticketId, ticketId));
+                const att = existingAgain && existingAgain.length > 0 ? existingAgain[0] : null;
+                return {
+                    success: false,
+                    reason: 'ALREADY_USED',
+                    existingCheckin: att ? {
+                        ...att,
+                        checked_in_at: att.checkedInAt || att.checked_in_at
+                    } : { checked_in_at: new Date().toISOString() }
+                };
             }
-        };
+            throw err;
+        }
     },
 
-    async getAllAttendance() {
+    async getAllAttendance(adminId) {
         if (mode === 'mongodb') {
-            const list = await mongoModels.Attendance.find().sort({ checked_in_at: -1 }).lean();
-            return Promise.all(list.map(async att => {
+            let filter = {};
+            if (adminId) {
+                const adminEvents = await mongoModels.Event.find({ created_by: adminId }, { _id: 1 }).lean();
+                const adminEventIds = adminEvents.map(e => e._id);
+                if (adminEventIds.length === 0) return [];
+                filter = { event_id: { $in: adminEventIds } };
+            }
+
+            const list = await mongoModels.Attendance.find(filter).sort({ checked_in_at: -1 }).lean();
+            const eventAttList = await Promise.all(list.map(async att => {
                 let ticketNum = '';
                 let guestName = '';
                 let guestEmail = '';
@@ -1375,7 +1519,7 @@ const dbQuery = {
                     eventTitle = evt?.title || '';
                 }
 
-                if (!guestName && (att.user_id || att.member_id)) {
+                if (!adminId && !guestName && (att.user_id || att.member_id)) {
                     const usr = await mongoModels.User.findById(att.user_id).lean() || 
                                 await mongoModels.User.findOne({ member_id: att.member_id }).lean();
                     if (usr) {
@@ -1397,10 +1541,20 @@ const dbQuery = {
                     event_title: eventTitle
                 };
             }));
+
+            return adminId ? eventAttList.filter(a => a.event_id) : eventAttList;
         }
 
         const t = getTables();
-        const attendanceList = await drizzleDb.select().from(t.attendance).orderBy(desc(t.attendance.checkedInAt));
+        let q = drizzleDb.select().from(t.attendance);
+        if (adminId) {
+            const adminEvents = await drizzleDb.select({ id: t.events.id }).from(t.events).where(eq(t.events.createdBy, adminId));
+            const adminEventIds = adminEvents.map(e => e.id);
+            if (adminEventIds.length === 0) return [];
+            q = q.where(inArray(t.attendance.eventId, adminEventIds));
+        }
+
+        const attendanceList = await q.orderBy(desc(t.attendance.checkedInAt));
         const eventAttList = await Promise.all(attendanceList.map(async att => {
             let ticketNum = '';
             let guestName = '';
@@ -1428,6 +1582,10 @@ const dbQuery = {
                 event_title: eventTitle
             };
         }));
+
+        if (adminId) {
+            return eventAttList;
+        }
 
         let memberAttList = [];
         try {
@@ -1486,9 +1644,17 @@ const dbQuery = {
         }));
     },
 
-    async getAllRegistrations() {
+    async getAllRegistrations(adminId) {
         if (mode === 'mongodb') {
-            const regs = await mongoModels.Registration.find().sort({ created_at: -1 }).lean();
+            let filter = {};
+            if (adminId) {
+                const adminEvents = await mongoModels.Event.find({ created_by: adminId }, { _id: 1 }).lean();
+                const adminEventIds = adminEvents.map(e => e._id);
+                if (adminEventIds.length === 0) return [];
+                filter = { event_id: { $in: adminEventIds } };
+            }
+
+            const regs = await mongoModels.Registration.find(filter).sort({ created_at: -1 }).lean();
             return Promise.all(regs.map(async reg => {
                 const evt = await mongoModels.Event.findById(reg.event_id).lean();
                 const pay = await mongoModels.Payment.findOne({ registration_id: reg._id }).lean();
@@ -1511,7 +1677,15 @@ const dbQuery = {
         }
 
         const t = getTables();
-        const regs = await drizzleDb.select().from(t.registrations).orderBy(desc(t.registrations.createdAt));
+        let q = drizzleDb.select().from(t.registrations);
+        if (adminId) {
+            const adminEvents = await drizzleDb.select({ id: t.events.id }).from(t.events).where(eq(t.events.createdBy, adminId));
+            const adminEventIds = adminEvents.map(e => e.id);
+            if (adminEventIds.length === 0) return [];
+            q = q.where(inArray(t.registrations.eventId, adminEventIds));
+        }
+
+        const regs = await q.orderBy(desc(t.registrations.createdAt));
         return Promise.all(regs.map(async reg => {
             const evt = await drizzleDb.select().from(t.events).where(eq(t.events.id, reg.eventId));
             const pay = await drizzleDb.select().from(t.payments).where(eq(t.payments.registrationId, reg.id));
@@ -1539,9 +1713,22 @@ const dbQuery = {
         }));
     },
 
-    async getAllPayments() {
+    async getAllPayments(adminId) {
         if (mode === 'mongodb') {
-            const payments = await mongoModels.Payment.find().sort({ created_at: -1 }).lean();
+            let filter = {};
+            if (adminId) {
+                const adminEvents = await mongoModels.Event.find({ created_by: adminId }, { _id: 1 }).lean();
+                const adminEventIds = adminEvents.map(e => e._id);
+                if (adminEventIds.length === 0) return [];
+
+                const adminRegs = await mongoModels.Registration.find({ event_id: { $in: adminEventIds } }, { _id: 1 }).lean();
+                const adminRegIds = adminRegs.map(r => r._id);
+                if (adminRegIds.length === 0) return [];
+
+                filter = { registration_id: { $in: adminRegIds } };
+            }
+
+            const payments = await mongoModels.Payment.find(filter).sort({ created_at: -1 }).lean();
             return Promise.all(payments.map(async pay => {
                 const reg = await mongoModels.Registration.findById(pay.registration_id).lean();
                 let evtTitle = '';
@@ -1560,7 +1747,20 @@ const dbQuery = {
         }
 
         const t = getTables();
-        const payments = await drizzleDb.select().from(t.payments).orderBy(desc(t.payments.createdAt));
+        let q = drizzleDb.select().from(t.payments);
+        if (adminId) {
+            const adminEvents = await drizzleDb.select({ id: t.events.id }).from(t.events).where(eq(t.events.createdBy, adminId));
+            const adminEventIds = adminEvents.map(e => e.id);
+            if (adminEventIds.length === 0) return [];
+
+            const adminRegs = await drizzleDb.select({ id: t.registrations.id }).from(t.registrations).where(inArray(t.registrations.eventId, adminEventIds));
+            const adminRegIds = adminRegs.map(r => r.id);
+            if (adminRegIds.length === 0) return [];
+
+            q = q.where(inArray(t.payments.registrationId, adminRegIds));
+        }
+
+        const payments = await q.orderBy(desc(t.payments.createdAt));
         return Promise.all(payments.map(async pay => {
             const reg = await drizzleDb.select().from(t.registrations).where(eq(t.registrations.id, pay.registrationId));
             let evtTitle = '';
@@ -1651,12 +1851,58 @@ const dbQuery = {
         return { success: true, refundId: refId };
     },
 
-    async getAdminDashboardStats() {
-        return this.getDashboardStats();
+    async getAdminDashboardStats(adminId) {
+        return this.getDashboardStats(adminId);
     },
 
-    async getDashboardStats() {
+    async getDashboardStats(adminId) {
         if (mode === 'mongodb') {
+            if (adminId) {
+                const adminEvents = await mongoModels.Event.find({ created_by: adminId }).lean();
+                const adminEventIds = adminEvents.map(e => e._id);
+                const totalEvents = adminEvents.length;
+                const upcomingEvents = adminEvents.filter(e => e.status === 'registration_open').length;
+
+                if (adminEventIds.length === 0) {
+                    return {
+                        totalEvents: 0,
+                        upcomingEvents: 0,
+                        totalRegistrations: 0,
+                        confirmedPayments: 0,
+                        checkedInCount: 0,
+                        totalRevenue: 0,
+                        recentRegistrations: []
+                    };
+                }
+
+                const totalRegistrations = await mongoModels.Registration.countDocuments({ event_id: { $in: adminEventIds } });
+                const confirmedPayments = await mongoModels.Registration.countDocuments({
+                    event_id: { $in: adminEventIds },
+                    registration_status: 'confirmed'
+                });
+                const checkedInCount = await mongoModels.Attendance.countDocuments({ event_id: { $in: adminEventIds } });
+
+                const adminRegs = await mongoModels.Registration.find({ event_id: { $in: adminEventIds } }, { _id: 1 }).lean();
+                const adminRegIds = adminRegs.map(r => r._id);
+                let totalRevenue = 0;
+                if (adminRegIds.length > 0) {
+                    const paidPayments = await mongoModels.Payment.find({ registration_id: { $in: adminRegIds }, status: 'paid' }).lean();
+                    totalRevenue = paidPayments.reduce((acc, p) => acc + (p.amount || 0), 0);
+                }
+
+                const recentRegistrations = await this.getAllRegistrations(adminId);
+
+                return {
+                    totalEvents,
+                    upcomingEvents,
+                    totalRegistrations,
+                    confirmedPayments,
+                    checkedInCount,
+                    totalRevenue,
+                    recentRegistrations: recentRegistrations.slice(0, 10)
+                };
+            }
+
             const totalEvents = await mongoModels.Event.countDocuments();
             const upcomingEvents = await mongoModels.Event.countDocuments({ status: 'registration_open' });
             const totalRegistrations = await mongoModels.Registration.countDocuments();
@@ -1680,6 +1926,51 @@ const dbQuery = {
         }
 
         const t = getTables();
+        if (adminId) {
+            const adminEvents = await drizzleDb.select().from(t.events).where(eq(t.events.createdBy, adminId));
+            const adminEventIds = adminEvents.map(e => e.id);
+            const totalEvents = adminEvents.length;
+            const upcomingEvents = adminEvents.filter(e => e.status === 'registration_open').length;
+
+            if (adminEventIds.length === 0) {
+                return {
+                    totalEvents: 0,
+                    upcomingEvents: 0,
+                    totalRegistrations: 0,
+                    confirmedPayments: 0,
+                    checkedInCount: 0,
+                    totalRevenue: 0,
+                    recentRegistrations: []
+                };
+            }
+
+            const adminRegs = await drizzleDb.select().from(t.registrations).where(inArray(t.registrations.eventId, adminEventIds));
+            const totalRegistrations = adminRegs.length;
+            const confirmedPayments = adminRegs.filter(r => r.registrationStatus === 'confirmed').length;
+
+            const adminAtts = await drizzleDb.select().from(t.attendance).where(inArray(t.attendance.eventId, adminEventIds));
+            const checkedInCount = adminAtts.length;
+
+            const adminRegIds = adminRegs.map(r => r.id);
+            let totalRevenue = 0;
+            if (adminRegIds.length > 0) {
+                const pays = await drizzleDb.select().from(t.payments).where(and(eq(t.payments.status, 'paid'), inArray(t.payments.registrationId, adminRegIds)));
+                totalRevenue = pays.reduce((acc, p) => acc + parseFloat(p.amount || 0), 0);
+            }
+
+            const recent = await this.getAllRegistrations(adminId);
+
+            return {
+                totalEvents,
+                upcomingEvents,
+                totalRegistrations,
+                confirmedPayments,
+                checkedInCount,
+                totalRevenue,
+                recentRegistrations: recent.slice(0, 10)
+            };
+        }
+
         const evts = await drizzleDb.select().from(t.events);
         const regs = await drizzleDb.select().from(t.registrations);
         const atts = await drizzleDb.select().from(t.attendance);
