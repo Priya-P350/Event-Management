@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { eventService, registrationService, paymentService } from '../services/serviceModules';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { TextInputField } from '../components/forms';
+import { TextInputField, PasswordField } from '../components/forms';
 import { 
   Ticket, Calendar, MapPin, User, Mail, Phone, 
   CreditCard, ArrowLeft, Loader2, Lock, Building, Briefcase
@@ -63,6 +63,7 @@ export const GuestRegistration = () => {
         name: data.name,
         email: data.email,
         phone: data.phone,
+        password: data.password || undefined,
         customAnswers: {
           company: data.company,
           designation: data.designation
@@ -301,6 +302,24 @@ export const GuestRegistration = () => {
                 error={errors.phone}
                 required
               />
+
+              {!user && (
+                <PasswordField
+                  name="password"
+                  label="Create Account Password"
+                  placeholder="••••••••"
+                  register={register}
+                  rules={{
+                    required: 'Account password is required so you can log in later',
+                    minLength: {
+                      value: 6,
+                      message: 'Password must be at least 6 characters'
+                    }
+                  }}
+                  error={errors.password}
+                  required
+                />
+              )}
 
               <div className="grid grid-cols-2 gap-3 pt-2">
                 <TextInputField

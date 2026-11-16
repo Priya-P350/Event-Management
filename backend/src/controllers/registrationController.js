@@ -39,7 +39,10 @@ async function createRegistration(req, res, next) {
             // Find or create guest user
             let guestUser = await dbQuery.findUserByEmail(email);
             if (!guestUser) {
-                const passwordHash = require('bcryptjs').hashSync('Guest@123', 10);
+                const userPassword = (req.body.password && String(req.body.password).trim().length >= 6) 
+                    ? String(req.body.password).trim() 
+                    : 'Guest@123';
+                const passwordHash = require('bcryptjs').hashSync(userPassword, 10);
                 guestUser = await dbQuery.createUser({
                     id: uuidv4(),
                     name,
@@ -48,6 +51,10 @@ async function createRegistration(req, res, next) {
                     password_hash: passwordHash,
                     role: 'guest'
                 });
+            } else if (req.body.password && String(req.body.password).trim().length >= 6) {
+                // Update credentials if user provided a new password during registration
+                const newHash = require('bcryptjs').hashSync(String(req.body.password).trim(), 10);
+                await dbQuery.updateUserPassword(guestUser.id, newHash);
             }
             effectiveUserId = guestUser.id;
         }
