@@ -176,13 +176,31 @@ async function scanTicket(req, res, next) {
             });
         }
 
-        // Event association check (if a specific event filter is selected)
+        // 1. Fetch Event Details
+        const ticketEvent = ticket.event || (ticket.event_id ? await dbQuery.getEventById(ticket.event_id) : null);
+
+        // 2. Organizer Event Scope Authorization:
+        // An event creator admin can only scan passes for events created by them
+        if (req.user && req.user.role === 'event_admin') {
+            const creatorId = ticketEvent ? (ticketEvent.created_by || ticketEvent.createdBy) : null;
+            if (creatorId && String(creatorId) !== String(req.user.id)) {
+                return res.status(403).json({
+                    success: false,
+                    code: 'WRONG_ORGANIZER',
+                    title: 'UNAUTHORIZED: NOT YOUR EVENT',
+                    message: `You are logged in as organizer (${req.user.name || req.user.email}), but this ticket belongs to "${ticketEvent ? ticketEvent.title : 'another event'}" created by a different organizer. You can only scan attendees registered for your own events.`,
+                    ticketEventTitle: ticketEvent ? ticketEvent.title : 'Other Event'
+                });
+            }
+        }
+
+        // 3. Event filter check (if user selected a specific event in scanner)
         if (eventId && eventId !== 'all' && eventId !== 'ALL' && ticket.event_id !== eventId) {
             return res.status(400).json({
                 success: false,
                 code: 'WRONG_EVENT',
                 title: 'INVALID EVENT TICKET',
-                message: `This ticket belongs to another event: "${ticket.event ? ticket.event.title : 'Different Event'}"`,
+                message: `This ticket belongs to another event: "${ticketEvent ? ticketEvent.title : 'Different Event'}"`,
                 ticket
             });
         }
@@ -273,7 +291,7 @@ async function scanTicket(req, res, next) {
             guestEmail: registration ? registration.guest_email : '',
             ticketNumber: ticket.ticket_number,
             uniqueId: ticket.ticket_number,
-            eventTitle: ticket.event ? ticket.event.title : 'Event',
+            eventTitle: ticketEvent ? ticketEvent.title : (ticket.event ? ticket.event.title : 'Event'),
             checkinTime,
             status: 'expired',
             attendanceId: result.attendance ? result.attendance.id : null

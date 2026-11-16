@@ -504,25 +504,6 @@ export const RegisterPage = () => {
               </div>
             </div>
           )}
-                    Continue to Portal <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => navigate('/login', { 
-                    state: { 
-                      registeredEmail: registeredUser.email, 
-                      message: 'Account created successfully! Enter your password to sign in.' 
-                    } 
-                  })}
-                  className="w-full py-2.5 rounded-xl bg-transparent hover:bg-cyan-950/40 text-[#94b8d6] hover:text-[#e0f2fe] font-semibold text-xs border border-cyan-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  Sign In with Your New Credentials <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          )}
 
         </div>
       ) : (

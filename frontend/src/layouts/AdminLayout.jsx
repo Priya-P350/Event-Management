@@ -5,7 +5,7 @@ import { Footer } from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
 import { 
   ShieldCheck, LayoutDashboard, Calendar, Users, 
-  CreditCard, CheckSquare, Image as ImageIcon, PlusCircle
+  CreditCard, CheckSquare, Image as ImageIcon, PlusCircle, QrCode
 } from 'lucide-react';
 
 export const AdminLayout = () => {
@@ -38,7 +38,14 @@ export const AdminLayout = () => {
             </div>
 
             {/* Quick Action Button */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
+              <Link
+                to="/scanner"
+                className="px-4 py-2 rounded-xl bg-[#041124] hover:bg-cyan-950/60 text-[#e0f2fe] font-bold text-xs flex items-center gap-1.5 border border-cyan-500/30 transition-all duration-200"
+              >
+                <QrCode className="w-4 h-4 text-[#38bdf8]" />
+                Live Gate Scanner
+              </Link>
               <Link
                 to="/admin/events/create"
                 className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#00f2fe] to-[#0284c7] text-[#020817] font-extrabold text-xs flex items-center gap-1.5 hover:from-[#38bdf8] hover:to-[#00f2fe] transition-all duration-200 shadow-[0_0_15px_rgba(0,242,254,0.35)] border border-[#38bdf8]"
@@ -61,6 +68,18 @@ export const AdminLayout = () => {
             >
               <LayoutDashboard className="w-3.5 h-3.5" />
               Overview Stats
+            </Link>
+
+            <Link
+              to="/scanner"
+              className={`px-3.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition-all duration-200 ${
+                isActive('/scanner') 
+                  ? 'bg-gradient-to-r from-[#00f2fe] to-[#0284c7] text-[#020817] font-extrabold shadow-[0_0_15px_rgba(0,242,254,0.35)]' 
+                  : 'text-[#94b8d6] hover:text-[#e0f2fe] hover:bg-cyan-950/40 border border-transparent'
+              }`}
+            >
+              <QrCode className="w-3.5 h-3.5 text-[#38bdf8]" />
+              Scan Attendee Passes
             </Link>
 
             <Link

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { eventService } from '../../services/serviceModules';
 import { useToast } from '../../context/ToastContext';
-import { PlusCircle, Edit3, Trash2, Calendar, MapPin, Loader2, Users, Clock, Award, Building } from 'lucide-react';
+import { PlusCircle, Edit3, Trash2, Calendar, MapPin, Loader2, Users, Clock, Award, Building, QrCode } from 'lucide-react';
 
 export const AdminEvents = () => {
   const toast = useToast();
@@ -148,6 +148,13 @@ export const AdminEvents = () => {
                   <span className="text-stone-200">Seats Left: <strong className="text-white font-bold">{evt.seats_remaining}</strong></span>
                   
                   <div className="flex items-center gap-2">
+                    <Link
+                      to={`/scanner?eventId=${evt.id}`}
+                      className="p-2 rounded-xl bg-cyan-950/80 hover:bg-[#38bdf8] text-[#38bdf8] hover:text-[#020817] border border-cyan-500/40 font-bold transition-all shadow-sm"
+                      title="Scan QR Passes for this Event"
+                    >
+                      <QrCode className="w-4 h-4" />
+                    </Link>
                     <Link
                       to={`/admin/events/${evt.id}`}
                       className="p-2 rounded-xl bg-black/80 hover:bg-white text-white hover:text-black border border-white/20 font-bold transition-all"

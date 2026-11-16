@@ -1,13 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import { checkinService, eventService } from '../services/serviceModules';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 import { 
-  Camera, CheckCircle2, AlertTriangle, XCircle, ShieldCheck, QrCode, Sparkles
+  Camera, CheckCircle2, AlertTriangle, XCircle, ShieldCheck, QrCode, Sparkles, UserCheck, ShieldAlert
 } from 'lucide-react';
 
 export const ScannerPage = () => {
   const toast = useToast();
+  const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+
   const [events, setEvents] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState('all');
   const [scanning, setScanning] = useState(false);
@@ -22,8 +27,19 @@ export const ScannerPage = () => {
     // Fetch active events for selection
     eventService.getEvents()
       .then(res => {
-        if (res.success) {
+        if (res.success && res.events) {
           setEvents(res.events || []);
+
+          const paramEventId = searchParams.get('eventId');
+          if (paramEventId) {
+            setSelectedEventId(paramEventId);
+          } else if (user?.role === 'event_admin') {
+            // Pre-select the admin's created event if available
+            const myEvents = res.events.filter(e => (e.created_by || e.createdBy) === user.id);
+            if (myEvents.length > 0) {
+              setSelectedEventId(myEvents[0].id || myEvents[0]._id);
+            }
+          }
         }
       })
       .catch(err => toast.error(err.message));
@@ -31,7 +47,7 @@ export const ScannerPage = () => {
     return () => {
       stopCamera();
     };
-  }, []);
+  }, [searchParams, user]);
 
   const playBeep = (type = 'success') => {
     try {
@@ -141,6 +157,13 @@ export const ScannerPage = () => {
           message: data.message || 'This ticket belongs to another event.'
         });
         toast.error('Ticket belongs to another event!');
+      } else if (data.code === 'WRONG_ORGANIZER') {
+        setScanResult({
+          status: 'WRONG_ORGANIZER',
+          title: '✕ UNAUTHORIZED: NOT YOUR EVENT',
+          message: data.message || 'You can only scan attendees registered for your own events.'
+        });
+        toast.error('Unauthorized: This ticket is for an event created by another organizer.');
       } else {
         setScanResult({
           status: 'INVALID',
@@ -164,33 +187,57 @@ export const ScannerPage = () => {
   return (
     <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
       
+      {/* Logged-in Organizer / Admin Identity Card */}
+      {user && (
+        <div className="p-4 rounded-2xl bg-[#041124]/90 border border-cyan-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xl backdrop-blur-xl">
+          <div className="flex items-center gap-2.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+            <div>
+              <span className="text-[#94b8d6] text-[11px] block">Scanner Operator Active</span>
+              <span className="font-extrabold text-[#e0f2fe] text-sm">
+                {user.name} <span className="text-[#38bdf8] font-mono text-xs font-normal">({user.email})</span>
+              </span>
+            </div>
+          </div>
+          <span className="px-3 py-1 rounded-full bg-cyan-950/80 text-[#38bdf8] border border-cyan-500/30 font-mono text-[10px] uppercase font-bold self-start sm:self-auto">
+            {user.role === 'event_admin' ? 'Event Creator Admin' : user.role === 'super_admin' ? 'Super Admin' : 'Gate Staff'}
+          </span>
+        </div>
+      )}
+
       {/* Header Banner */}
       <div className="text-center space-y-2">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold text-xs uppercase tracking-wider border border-emerald-500/40">
-          <ShieldCheck className="w-4 h-4 text-emerald-400" /> AUTHORIZED ADMIN & STAFF GATE SCANNER
+          <ShieldCheck className="w-4 h-4 text-emerald-400" /> AUTHORIZED EVENT GATE SCANNER
         </div>
-        <h1 className="text-3xl font-black text-white">QR Admission & Expiration Gate</h1>
-        <p className="text-xs text-zinc-400">
-          Scan guest or member QR codes. <strong className="text-amber-300">Each QR code automatically expires upon first scan.</strong>
+        <h1 className="text-3xl font-black text-[#e0f2fe]">QR Admission & Expiration Gate</h1>
+        <p className="text-xs text-[#94b8d6]">
+          {user?.role === 'event_admin' 
+            ? 'Scan attendee QR passes for your events. Only tickets registered for your events will be approved.'
+            : 'Scan guest or member QR codes. Each QR code automatically expires upon first scan.'}
         </p>
       </div>
 
       {/* Event Selection */}
-      <div className="bg-zinc-950 border border-zinc-800 p-4 rounded-2xl space-y-2 shadow-lg">
-        <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider">
-          Gate Scanning Mode / Target Event
+      <div className="bg-[#041124]/90 border border-cyan-500/25 p-4 rounded-2xl space-y-2 shadow-xl backdrop-blur-xl">
+        <label className="block text-xs font-bold text-[#e0f2fe] uppercase tracking-wider flex items-center justify-between">
+          <span>Gate Scanning Mode / Target Event</span>
+          <span className="text-[10px] text-[#38bdf8] font-mono lowercase">Single-Use Automatic Expiration</span>
         </label>
         <select
           value={selectedEventId}
           onChange={(e) => setSelectedEventId(e.target.value)}
-          className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#38bdf8]"
+          className="w-full bg-[#020817] border border-cyan-500/30 rounded-xl px-4 py-2.5 text-xs text-[#e0f2fe] focus:outline-none focus:border-[#38bdf8]"
         >
-          <option value="all">⚡ Universal Admission (Scan ANY Member Pass or Event Ticket)</option>
-          {events.map((evt) => (
-            <option key={evt.id} value={evt.id}>
-              {evt.title} ({new Date(evt.event_date).toLocaleDateString()})
-            </option>
-          ))}
+          <option value="all">⚡ All Events (Validate Any Pass For Your Events)</option>
+          {events.map((evt) => {
+            const isMine = (evt.created_by || evt.createdBy) === user?.id;
+            return (
+              <option key={evt.id || evt._id} value={evt.id || evt._id}>
+                {isMine ? '★ [My Created Event] ' : ''}{evt.title} ({evt.event_date})
+              </option>
+            );
+          })}
         </select>
       </div>
 

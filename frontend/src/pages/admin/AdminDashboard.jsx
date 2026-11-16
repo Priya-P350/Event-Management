@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { adminService } from '../../services/serviceModules';
 import { 
-  Calendar, Users, CheckSquare, Sparkles, DollarSign, Loader2, TrendingUp, PlusCircle 
+  Calendar, Users, CheckSquare, Sparkles, DollarSign, Loader2, TrendingUp, PlusCircle, QrCode 
 } from 'lucide-react';
 
 export const AdminDashboard = () => {
@@ -45,6 +45,12 @@ export const AdminDashboard = () => {
           <p className="text-xs text-[#95B8C9]">Monitor event performance, revenue, guest registrations, and entry scans</p>
         </div>
         <div className="flex items-center gap-3">
+          <Link
+            to="/scanner"
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#00f2fe] to-[#0284c7] text-[#020817] font-black text-xs flex items-center gap-2 hover:from-[#38bdf8] hover:to-[#00f2fe] border border-[#38bdf8] transition-all shadow-[0_0_15px_rgba(0,242,254,0.3)] hover:scale-105"
+          >
+            <QrCode className="w-4 h-4 text-[#020817]" /> Scan Event Passes
+          </Link>
           <Link
             to="/admin/events/create"
             className="px-4 py-2.5 rounded-xl bg-[#E5F4F9] text-[#0B1928] font-extrabold text-xs flex items-center gap-2 hover:bg-[#C3E2ED] border border-[#E5F4F9] transition-all shadow-md hover:scale-105"
