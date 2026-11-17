@@ -49,10 +49,12 @@ export const Login = () => {
         } else if (['super_admin', 'event_admin'].includes(res.user.role)) {
           navigate('/admin');
         } else {
-          // If redirected from a specific protected page, go there; otherwise go to /dashboard
-          const destination = (location.state?.from?.pathname && location.state.from.pathname !== '/login') 
+          // If redirected from a specific protected page or query param, go there; otherwise explore events
+          const searchParams = new URLSearchParams(location.search);
+          const redirectParam = searchParams.get('redirect');
+          const destination = redirectParam || (location.state?.from?.pathname && location.state.from.pathname !== '/login' 
             ? location.state.from.pathname 
-            : '/dashboard';
+            : '/events');
           navigate(destination);
         }
       }

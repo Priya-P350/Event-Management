@@ -251,14 +251,23 @@ export const GuestRegistration = () => {
             
             <div>
               <h2 className="text-xl font-bold text-[#E5F4F9] flex items-center gap-2">
-                <Ticket className="w-5 h-5 text-[#4A96BA]" /> Guest Registration Form
+                <Ticket className="w-5 h-5 text-[#4A96BA]" /> Event Pass Registration
               </h2>
-              <p className="text-xs text-[#95B8C9]">
+              <p className="text-xs text-[#95B8C9] mt-0.5">
                 {Number(event.ticket_price) === 0 
-                  ? 'Free event registration. An instant QR access pass will be emailed to you.' 
-                  : 'Powered by React Hook Form & Razorpay Payment Gateway'}
+                  ? 'Free event registration. An instant single-use QR access pass will be generated and emailed to your Gmail.' 
+                  : `Pass registration for ${event.title} — ₹${event.ticket_price}. Instant QR pass will be emailed to you upon payment.`}
               </p>
             </div>
+
+            {!user && (
+              <div className="p-3 bg-[#0B1928] border border-[#1E394E] rounded-xl text-xs text-[#95B8C9] flex items-center justify-between">
+                <span>Already registered an account?</span>
+                <Link to={`/login?redirect=/register/${eventId}`} className="text-[#4A96BA] font-bold hover:underline">
+                  Sign In to Autofill
+                </Link>
+              </div>
+            )}
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               

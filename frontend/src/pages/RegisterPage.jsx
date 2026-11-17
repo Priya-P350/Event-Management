@@ -18,14 +18,8 @@ export const RegisterPage = () => {
   const [searchParams] = useSearchParams();
 
   const [registeredUser, setRegisteredUser] = useState(null);
-  const [registeredEvent, setRegisteredEvent] = useState(null);
-  const [registeredTicket, setRegisteredTicket] = useState(null);
-  const [copied, setCopied] = useState(false);
-  const [accountType, setAccountType] = useState('');
+  const [accountType, setAccountType] = useState('attendee');
   const [accountTypeError, setAccountTypeError] = useState(false);
-  const [events, setEvents] = useState([]);
-  const [selectedEventId, setSelectedEventId] = useState('');
-  const [loadingEvents, setLoadingEvents] = useState(false);
 
   const {
     register,
@@ -39,7 +33,7 @@ export const RegisterPage = () => {
       email: '',
       phone: '',
       password: '',
-      role: ''
+      role: 'attendee'
     }
   });
 
@@ -50,29 +44,10 @@ export const RegisterPage = () => {
   ];
 
   const roleDescriptions = {
-    attendee: 'Register for a specific event, get a single-use QR admission ticket on screen & email.',
-    organizer: 'Create events, manage seats, review payments, and monitor gate check-ins.',
-    gate_staff: 'Scan attendee QR codes, verify admission passes, and manage entry.'
+    attendee: 'Create attendee profile to explore upcoming events, select your preferred event at your convenience, and receive official QR passes.',
+    organizer: 'Create and manage events, set ticket pricing, and scan event attendee QR codes.',
+    gate_staff: 'Scan attendee QR codes at entrance gates and verify admission.'
   };
-
-  useEffect(() => {
-    setLoadingEvents(true);
-    eventService.getEvents()
-      .then(res => {
-        if (res.success && res.events) {
-          setEvents(res.events);
-          const paramEventId = searchParams.get('eventId');
-          if (paramEventId) {
-            setSelectedEventId(paramEventId);
-            setAccountType('attendee');
-          } else if (res.events.length > 0) {
-            setSelectedEventId(res.events[0].id || res.events[0]._id);
-          }
-        }
-      })
-      .catch(err => console.warn('Could not load events:', err.message))
-      .finally(() => setLoadingEvents(false));
-  }, [searchParams]);
 
   const handleSelectAccountType = (type) => {
     setAccountType(type);
@@ -88,11 +63,6 @@ export const RegisterPage = () => {
       return;
     }
 
-    if (accountType === 'attendee' && !selectedEventId && events.length > 0) {
-      toast.error('Please select an event to register for');
-      return;
-    }
-
     const fullName = `${data.firstName.trim()} ${data.lastName.trim()}`.trim() || 'New User';
 
     try {
@@ -101,21 +71,21 @@ export const RegisterPage = () => {
         email: data.email.trim(),
         phone: data.phone.trim(),
         password: data.password,
-        role: accountType,
-        eventId: accountType === 'attendee' ? selectedEventId : undefined
+        role: accountType
       });
 
       if (res.success && res.user) {
-        if (accountType === 'organizer' || ['organizer', 'event_admin'].includes(res.user.role)) {
+        if (accountType === 'attendee') {
+          toast.success(`Welcome to EventHub, ${fullName}! Account created. Explore events to register for your favorite event!`);
+          navigate('/events');
+          return;
+        } else if (accountType === 'organizer' || ['organizer', 'event_admin'].includes(res.user.role)) {
           toast.success(`Organizer account created! Welcome to EventHub, ${fullName}!`);
+          setRegisteredUser(res.user);
         } else if (accountType === 'gate_staff' || ['gate_staff', 'scanner_staff'].includes(res.user.role)) {
           toast.success(`Gate scanner staff account activated for ${fullName}!`);
-        } else {
-          toast.success(`Registration successful! Your QR ticket for ${res.event?.title || 'the event'} has been sent to your Gmail!`);
+          setRegisteredUser(res.user);
         }
-        setRegisteredUser(res.user);
-        if (res.event) setRegisteredEvent(res.event);
-        if (res.ticket) setRegisteredTicket(res.ticket);
       }
     } catch (err) {
       toast.error(err.message || 'Registration failed.');
@@ -664,81 +634,6 @@ export const RegisterPage = () => {
                   </div>
                 ) : null}
 
-                {/* Event Selector for Attendees */}
-                {accountType === 'attendee' && (
-                  <div className="space-y-2.5 pt-2 animate-in fade-in duration-300">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-[#e0f2fe] flex items-center gap-1.5">
-                        <Ticket className="w-3.5 h-3.5 text-[#38bdf8]" />
-                        Select Event to Register For <span className="text-[#38bdf8]">*</span>
-                      </label>
-                      <span className="text-[10px] text-[#38bdf8] font-mono">
-                        Admission Pass Issued For This Event
-                      </span>
-                    </div>
-
-                    {loadingEvents ? (
-                      <div className="p-4 rounded-2xl bg-[#020817] border border-cyan-500/20 text-center text-xs text-[#94b8d6] flex items-center justify-center gap-2">
-                        <Loader2 className="w-4 h-4 animate-spin text-[#38bdf8]" /> Loading available events...
-                      </div>
-                    ) : events.length === 0 ? (
-                      <div className="p-3.5 rounded-2xl bg-[#020817] border border-amber-500/30 text-xs text-amber-300">
-                        No events currently open for registration.
-                      </div>
-                    ) : (
-                      <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                        {events.map((evt) => {
-                          const evtId = evt.id || evt._id;
-                          const isSelected = selectedEventId === evtId;
-                          const isFree = Number(evt.ticket_price || 0) === 0;
-
-                          return (
-                            <div
-                              key={evtId}
-                              onClick={() => setSelectedEventId(evtId)}
-                              className={`p-3 rounded-2xl border transition-all duration-200 cursor-pointer flex items-center justify-between gap-3 ${
-                                isSelected
-                                  ? 'bg-cyan-950/70 border-[#38bdf8] ring-1 ring-[#38bdf8] shadow-[0_0_12px_rgba(56,189,248,0.25)]'
-                                  : 'bg-[#020817] border-cyan-500/20 hover:border-cyan-500/40 hover:bg-[#041124]'
-                              }`}
-                            >
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div
-                                  className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
-                                    isSelected ? 'border-[#38bdf8] bg-[#38bdf8]' : 'border-cyan-500/40'
-                                  }`}
-                                >
-                                  {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-[#020817]"></span>}
-                                </div>
-                                <div className="min-w-0">
-                                  <h4 className="text-xs font-bold text-[#e0f2fe] truncate">{evt.title}</h4>
-                                  <div className="flex items-center gap-2 text-[10px] text-[#94b8d6] mt-0.5">
-                                    <span>{evt.event_date}</span>
-                                    <span>•</span>
-                                    <span className="truncate max-w-[150px]">{evt.venue}</span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="shrink-0 text-right">
-                                <span
-                                  className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
-                                    isFree
-                                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                      : 'bg-cyan-900/50 text-[#38bdf8] border border-cyan-500/30'
-                                  }`}
-                                >
-                                  {isFree ? 'FREE PASS' : `₹${evt.ticket_price}`}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-
                 <button
                   type="submit"
                   disabled={isSubmitting}
@@ -747,7 +642,11 @@ export const RegisterPage = () => {
                   {isSubmitting ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin text-[#020817]" />
-                      {accountType === 'organizer' ? 'Activating Organizer Profile...' : 'Generating Account & Pass...'}
+                      {accountType === 'organizer' 
+                        ? 'Activating Organizer Profile...' 
+                        : accountType === 'gate_staff'
+                        ? 'Activating Gate Staff...'
+                        : 'Creating Attendee Profile...'}
                     </>
                   ) : (
                     <>
@@ -755,7 +654,7 @@ export const RegisterPage = () => {
                         ? 'Create Organizer Account & Dashboard' 
                         : accountType === 'gate_staff'
                         ? 'Create Gate Staff Account'
-                        : 'Create Account & Generate QR Pass'}
+                        : 'Create Attendee Account & Explore Events'}
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
