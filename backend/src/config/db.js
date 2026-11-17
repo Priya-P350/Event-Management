@@ -255,6 +255,8 @@ function initSqliteTables(db) {
 }
 
 function seedSqliteData(db) {
+    // Fresh start: Auto-seeding disabled
+    return;
     const insertEvent = db.prepare(`
         INSERT INTO events (id, title, description, category, cover_image_url, event_date, start_time, end_time, venue, address, google_maps_url, ticket_price, capacity, registration_open_at, registration_close_at, status, created_by)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

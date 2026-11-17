@@ -37,6 +37,8 @@ async function connectMongo() {
 }
 
 async function seedMongoIfEmpty() {
+    // Fresh start: Auto-seeding disabled
+    return;
     try {
         const eventCount = await models.Event.countDocuments();
         if (eventCount > 0) return;
