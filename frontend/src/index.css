@@ -7,6 +7,9 @@
   html, body, button, a, [role="button"], .cursor-pointer {
     cursor: none !important;
   }
+  input, textarea, select, [contenteditable="true"] {
+    cursor: text !important;
+  }
 }
 
 :root {
