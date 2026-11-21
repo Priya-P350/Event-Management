@@ -126,6 +126,15 @@ export const Login = () => {
                 error={errors.password}
               />
 
+              <div className="flex items-center justify-end -mt-1">
+                <Link
+                  to="/forgot-password"
+                  className="text-xs font-semibold text-[#38bdf8] hover:text-[#00f2fe] hover:underline transition-colors cursor-pointer"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+
               <button
                 type="submit"
                 disabled={isSubmitting}

@@ -830,6 +830,17 @@ const dbQuery = {
         return this.findUserById(userId);
     },
 
+    async updateUserPassword(userId, passwordHash) {
+        if (mode === 'mongodb') {
+            await mongoModels.User.updateOne({ _id: userId }, { password_hash: passwordHash });
+            return this.findUserById(userId);
+        }
+
+        const t = getTables();
+        await drizzleDb.update(t.users).set({ password_hash: passwordHash }).where(eq(t.users.id, userId));
+        return this.findUserById(userId);
+    },
+
     async deleteUser(userId) {
         if (mode === 'mongodb') {
             await mongoModels.User.deleteOne({ _id: userId });

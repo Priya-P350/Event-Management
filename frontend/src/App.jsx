@@ -19,6 +19,7 @@ import { GuestRegistration } from './pages/GuestRegistration';
 import { PaymentSuccess } from './pages/PaymentSuccess';
 import { PaymentFailed } from './pages/PaymentFailed';
 import { Login } from './pages/Login';
+import { ForgotPassword } from './pages/ForgotPassword';
 import { RegisterPage } from './pages/RegisterPage';
 import { SingleTicketView } from './pages/SingleTicketView';
 import { ScannerPage } from './pages/ScannerPage';
@@ -61,6 +62,7 @@ export default function App() {
             <Route path="/payment/success" element={<PaymentSuccess />} />
             <Route path="/payment/failed" element={<PaymentFailed />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/ticket/:id" element={<SingleTicketView />} />
             <Route path="/unauthorized" element={<Unauthorized />} />

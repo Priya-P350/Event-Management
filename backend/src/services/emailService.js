@@ -530,6 +530,297 @@ async function sendOtpEmail({ email, otp, name }) {
     }
 }
 
+/**
+ * Sends a Password Reset OTP email with account identification info
+ */
+async function sendPasswordResetOtpEmail({ email, name, otp, role, adminId, memberId }) {
+    const fromAddress = process.env.EMAIL_FROM || 'EventHub Security <onboarding@resend.dev>';
+    const recipientEmail = (email || '').trim().toLowerCase();
+    const displayName = (name || '').trim() || 'User';
+    const identifier = adminId || memberId || '';
+
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>Reset Your EventHub Password</title>
+        <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #020617; color: #f8fafc; margin: 0; padding: 0; }
+            .container { max-width: 520px; margin: 30px auto; background-color: #0b1528; border: 1px solid #1e394e; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }
+            .header { background: linear-gradient(135deg, #020817 0%, #041124 100%); padding: 28px 24px; text-align: center; border-bottom: 1px solid #1e394e; }
+            .brand { font-size: 20px; font-weight: 900; letter-spacing: 2px; color: #e0f2fe; text-transform: uppercase; margin-bottom: 6px; }
+            .badge { display: inline-block; background-color: rgba(245, 158, 11, 0.15); color: #fbbf24; font-size: 11px; font-weight: 800; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase; border: 1px solid rgba(245, 158, 11, 0.4); letter-spacing: 1px; }
+            .content { padding: 32px 24px; text-align: center; }
+            .greeting { font-size: 17px; font-weight: 700; color: #e0f2fe; margin-bottom: 12px; }
+            .instructions { font-size: 13px; color: #94b8d6; line-height: 1.6; margin-bottom: 20px; }
+            .account-info { background-color: #020817; border: 1px solid #1e293b; border-radius: 12px; padding: 12px 16px; margin: 16px 0; text-align: left; font-size: 12px; }
+            .info-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
+            .info-label { color: #64748b; }
+            .info-value { color: #38bdf8; font-weight: 700; font-family: monospace; }
+            .otp-box { background-color: #020817; border: 2px solid #38bdf8; border-radius: 14px; padding: 22px 16px; margin: 20px 0; text-align: center; box-shadow: 0 0 25px rgba(56, 189, 248, 0.2); }
+            .otp-code { font-family: 'Courier New', Courier, monospace; font-size: 38px; font-weight: 900; letter-spacing: 12px; color: #38bdf8; display: inline-block; padding-left: 12px; }
+            .timer { font-size: 12px; color: #38bdf8; font-weight: 600; margin-top: 10px; }
+            .warning { font-size: 11px; color: #ef4444; margin-top: 24px; padding-top: 16px; border-top: 1px solid #1e293b; line-height: 1.5; }
+            .footer { background-color: #020817; padding: 18px 24px; text-align: center; font-size: 11px; color: #475569; border-top: 1px solid #1e293b; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="brand">EVENT<span style="color: #38bdf8;">HUB</span></div>
+                <div class="badge">Password Recovery</div>
+            </div>
+            <div class="content">
+                <div class="greeting">Hello ${escapeHtml(displayName)},</div>
+                <div class="instructions">
+                    We received a request to recover or reset the password for your EventHub account. Use the 6-digit recovery code below:
+                </div>
+                
+                <div class="account-info">
+                    <div class="info-row"><span class="info-label">Account Email:</span> <span class="info-value">${escapeHtml(recipientEmail)}</span></div>
+                    <div class="info-row"><span class="info-label">Account Role:</span> <span class="info-value">${escapeHtml(role || 'Attendee')}</span></div>
+                    ${identifier ? `<div class="info-row"><span class="info-label">Account ID:</span> <span class="info-value">${escapeHtml(identifier)}</span></div>` : ''}
+                </div>
+
+                <div class="otp-box">
+                    <div class="otp-code">${otp}</div>
+                    <div class="timer">⏱️ Code valid for 15 minutes only</div>
+                </div>
+
+                <div class="instructions" style="font-size: 12px; color: #cbd5e1;">
+                    Enter this verification code on the Forgot Password screen along with your new password.
+                </div>
+
+                <div class="warning">
+                    ⚠️ <strong>Security Notice:</strong> If you did not initiate this request, your account is still secure. You can safely ignore this email.
+                </div>
+            </div>
+            <div class="footer">
+                &copy; 2026 EventHub Inc. • Password Recovery Service
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+
+    try {
+        if (resendClient && resendClient.isConfigured) {
+            const registeredAccountEmail = (process.env.RESEND_REGISTERED_EMAIL || 'priyapatel36306@gmail.com').trim().toLowerCase();
+
+            const emailPayload = {
+                from: fromAddress,
+                to: recipientEmail,
+                subject: `🔑 [EventHub] Password Reset Code: ${otp}`,
+                html: htmlContent
+            };
+
+            let response = await resendClient.emails.send(emailPayload);
+
+            if (response && response.error) {
+                console.warn(`[Reset OTP Email - Resend Notice] Delivering to registered account: ${registeredAccountEmail}`);
+                emailPayload.to = registeredAccountEmail;
+                emailPayload.subject = `🔑 [EventHub Password Reset: ${otp}] For: ${displayName} <${recipientEmail}>`;
+                response = await resendClient.emails.send(emailPayload);
+            }
+
+            if (response && response.error) {
+                console.error('[Reset OTP Email - Resend API Error]', response.error);
+            } else {
+                console.log(`[Reset OTP Email] ✅ Dispatched to ${emailPayload.to} (ID: ${response?.data?.id || 'ok'})`);
+            }
+        } else {
+            console.log(`\n======================================================`);
+            console.log(`[PASSWORD RESET OTP PREVIEW]`);
+            console.log(`To: ${recipientEmail}`);
+            console.log(`OTP Code: ${otp}`);
+            console.log(`======================================================\n`);
+        }
+    } catch (err) {
+        console.error('[Reset OTP Email Exception]', err.message);
+    }
+}
+
+/**
+ * Sends a confirmation email after password has been successfully reset
+ */
+async function sendPasswordResetSuccessEmail({ email, name, role }) {
+    const fromAddress = process.env.EMAIL_FROM || 'EventHub Security <onboarding@resend.dev>';
+    const recipientEmail = (email || '').trim().toLowerCase();
+    const displayName = (name || '').trim() || 'User';
+    const loginUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/login`;
+
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>EventHub Password Successfully Changed</title>
+        <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #020617; color: #f8fafc; margin: 0; padding: 0; }
+            .container { max-width: 520px; margin: 30px auto; background-color: #0b1528; border: 1px solid #1e394e; border-radius: 20px; overflow: hidden; }
+            .header { background: linear-gradient(135deg, #020817 0%, #041124 100%); padding: 28px 24px; text-align: center; border-bottom: 1px solid #1e394e; }
+            .brand { font-size: 20px; font-weight: 900; letter-spacing: 2px; color: #e0f2fe; text-transform: uppercase; margin-bottom: 6px; }
+            .badge { display: inline-block; background-color: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 11px; font-weight: 800; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase; border: 1px solid rgba(16, 185, 129, 0.4); }
+            .content { padding: 32px 24px; text-align: center; }
+            .greeting { font-size: 17px; font-weight: 700; color: #e0f2fe; margin-bottom: 12px; }
+            .instructions { font-size: 13px; color: #94b8d6; line-height: 1.6; margin-bottom: 24px; }
+            .btn { display: inline-block; background: linear-gradient(to right, #00f2fe, #0284c7); color: #020817; font-weight: 900; font-size: 13px; padding: 12px 28px; border-radius: 12px; text-decoration: none; margin: 16px 0; }
+            .footer { background-color: #020817; padding: 18px 24px; text-align: center; font-size: 11px; color: #475569; border-top: 1px solid #1e293b; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="brand">EVENT<span style="color: #38bdf8;">HUB</span></div>
+                <div class="badge">Security Notification</div>
+            </div>
+            <div class="content">
+                <div class="greeting">Hello ${escapeHtml(displayName)},</div>
+                <div class="instructions">
+                    Your EventHub password was successfully updated. You can now use your email <strong>${escapeHtml(recipientEmail)}</strong> and new password to access your account.
+                </div>
+                <div>
+                    <a href="${loginUrl}" class="btn">Sign In to EventHub</a>
+                </div>
+            </div>
+            <div class="footer">
+                &copy; 2026 EventHub Inc. • Security Team
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+
+    try {
+        if (resendClient && resendClient.isConfigured) {
+            const registeredAccountEmail = (process.env.RESEND_REGISTERED_EMAIL || 'priyapatel36306@gmail.com').trim().toLowerCase();
+            const emailPayload = {
+                from: fromAddress,
+                to: recipientEmail,
+                subject: `✅ [EventHub] Password Successfully Changed`,
+                html: htmlContent
+            };
+            let response = await resendClient.emails.send(emailPayload);
+            if (response && response.error) {
+                emailPayload.to = registeredAccountEmail;
+                emailPayload.subject = `✅ [EventHub Password Changed] For: ${displayName} <${recipientEmail}>`;
+                response = await resendClient.emails.send(emailPayload);
+            }
+        }
+    } catch (err) {
+        console.error('[Password Reset Success Email Exception]', err.message);
+    }
+}
+
+/**
+ * Sends newly generated temporary credentials directly to user's email
+ */
+async function sendTemporaryCredentialsEmail({ email, name, temporaryPassword, role, memberId, adminId }) {
+    const fromAddress = process.env.EMAIL_FROM || 'EventHub Security <onboarding@resend.dev>';
+    const recipientEmail = (email || '').trim().toLowerCase();
+    const displayName = (name || '').trim() || 'User';
+    const loginUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/login`;
+    const identifier = adminId || memberId || '';
+
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>Your EventHub Login Credentials</title>
+        <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #020617; color: #f8fafc; margin: 0; padding: 0; }
+            .container { max-width: 520px; margin: 30px auto; background-color: #0b1528; border: 1px solid #1e394e; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }
+            .header { background: linear-gradient(135deg, #020817 0%, #041124 100%); padding: 28px 24px; text-align: center; border-bottom: 1px solid #1e394e; }
+            .brand { font-size: 20px; font-weight: 900; letter-spacing: 2px; color: #e0f2fe; text-transform: uppercase; margin-bottom: 6px; }
+            .badge { display: inline-block; background-color: rgba(56, 189, 248, 0.15); color: #38bdf8; font-size: 11px; font-weight: 800; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase; border: 1px solid rgba(56, 189, 248, 0.4); }
+            .content { padding: 32px 24px; text-align: center; }
+            .greeting { font-size: 17px; font-weight: 700; color: #e0f2fe; margin-bottom: 12px; }
+            .instructions { font-size: 13px; color: #94b8d6; line-height: 1.6; margin-bottom: 20px; }
+            .cred-card { background-color: #020817; border: 2px solid #38bdf8; border-radius: 14px; padding: 18px 20px; margin: 20px 0; text-align: left; box-shadow: 0 0 25px rgba(56, 189, 248, 0.2); font-size: 13px; }
+            .cred-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #1e293b; }
+            .cred-row:last-child { border-bottom: none; }
+            .cred-label { color: #64748b; font-weight: 600; }
+            .cred-val { color: #e0f2fe; font-family: monospace; font-weight: 700; }
+            .temp-pwd { color: #38bdf8; font-size: 16px; font-weight: 900; background: #0b1528; padding: 2px 8px; border-radius: 6px; border: 1px solid #1e394e; }
+            .btn { display: inline-block; background: linear-gradient(to right, #00f2fe, #0284c7); color: #020817; font-weight: 900; font-size: 13px; padding: 12px 28px; border-radius: 12px; text-decoration: none; margin: 16px 0; }
+            .warning { font-size: 11px; color: #f59e0b; margin-top: 18px; padding-top: 14px; border-top: 1px solid #1e293b; line-height: 1.5; }
+            .footer { background-color: #020817; padding: 18px 24px; text-align: center; font-size: 11px; color: #475569; border-top: 1px solid #1e293b; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="brand">EVENT<span style="color: #38bdf8;">HUB</span></div>
+                <div class="badge">Account Credentials</div>
+            </div>
+            <div class="content">
+                <div class="greeting">Hello ${escapeHtml(displayName)},</div>
+                <div class="instructions">
+                    Here are your recovered login credentials for your EventHub account:
+                </div>
+
+                <div class="cred-card">
+                    <div class="cred-row"><span class="cred-label">Login Email:</span> <span class="cred-val">${escapeHtml(recipientEmail)}</span></div>
+                    <div class="cred-row"><span class="cred-label">Temporary Password:</span> <span class="temp-pwd">${escapeHtml(temporaryPassword)}</span></div>
+                    <div class="cred-row"><span class="cred-label">Account Role:</span> <span class="cred-val">${escapeHtml(role || 'Attendee')}</span></div>
+                    ${identifier ? `<div class="cred-row"><span class="cred-label">Account ID:</span> <span class="cred-val">${escapeHtml(identifier)}</span></div>` : ''}
+                </div>
+
+                <div>
+                    <a href="${loginUrl}" class="btn">Sign In Now</a>
+                </div>
+
+                <div class="warning">
+                    💡 <strong>Tip:</strong> Once logged in, you can update this temporary password to your personal password anytime.
+                </div>
+            </div>
+            <div class="footer">
+                &copy; 2026 EventHub Inc. • Account Access
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+
+    try {
+        if (resendClient && resendClient.isConfigured) {
+            const registeredAccountEmail = (process.env.RESEND_REGISTERED_EMAIL || 'priyapatel36306@gmail.com').trim().toLowerCase();
+
+            const emailPayload = {
+                from: fromAddress,
+                to: recipientEmail,
+                subject: `🔐 [EventHub] Your Login Credentials & Temporary Password`,
+                html: htmlContent
+            };
+
+            let response = await resendClient.emails.send(emailPayload);
+
+            if (response && response.error) {
+                console.warn(`[Temporary Credentials Email - Resend Notice] Delivering to registered account: ${registeredAccountEmail}`);
+                emailPayload.to = registeredAccountEmail;
+                emailPayload.subject = `🔐 [EventHub Credentials: ${temporaryPassword}] For: ${displayName} <${recipientEmail}>`;
+                response = await resendClient.emails.send(emailPayload);
+            }
+
+            if (response && response.error) {
+                console.error('[Temporary Credentials Email - Resend API Error]', response.error);
+            } else {
+                console.log(`[Temporary Credentials Email] ✅ Dispatched to ${emailPayload.to} (ID: ${response?.data?.id || 'ok'})`);
+            }
+        } else {
+            console.log(`\n======================================================`);
+            console.log(`[TEMPORARY CREDENTIALS PREVIEW]`);
+            console.log(`To: ${recipientEmail}`);
+            console.log(`Password: ${temporaryPassword}`);
+            console.log(`======================================================\n`);
+        }
+    } catch (err) {
+        console.error('[Temporary Credentials Email Exception]', err.message);
+    }
+}
+
 function escapeHtml(str) {
     if (!str) return '';
     return String(str)
@@ -550,5 +841,8 @@ function formatLabel(str) {
 module.exports = {
     sendQRTicketEmail,
     sendMemberPassEmail,
-    sendOtpEmail
+    sendOtpEmail,
+    sendPasswordResetOtpEmail,
+    sendPasswordResetSuccessEmail,
+    sendTemporaryCredentialsEmail
 };

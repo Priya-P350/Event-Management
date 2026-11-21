@@ -5,7 +5,14 @@ const dbQuery = require('../config/db');
 const { jwtSecret } = require('../middleware/auth');
 const { generateTicketToken, generateMemberToken, generateAdminId } = require('../utils/ticketToken');
 const { generateQRCodeDataUrl } = require('../services/qrService');
-const { sendQRTicketEmail, sendMemberPassEmail, sendOtpEmail } = require('../services/emailService');
+const { 
+    sendQRTicketEmail, 
+    sendMemberPassEmail, 
+    sendOtpEmail,
+    sendPasswordResetOtpEmail,
+    sendPasswordResetSuccessEmail,
+    sendTemporaryCredentialsEmail
+} = require('../services/emailService');
 
 async function sendOtp(req, res, next) {
     try {
@@ -330,11 +337,174 @@ async function getMe(req, res, next) {
     }
 }
 
+async function forgotPassword(req, res, next) {
+    try {
+        const { email } = req.body;
+        if (!email || !String(email).includes('@')) {
+            return res.status(400).json({ success: false, message: 'Please provide a valid email address.' });
+        }
+
+        const cleanEmail = String(email).trim().toLowerCase();
+        const user = await dbQuery.findUserByEmail(cleanEmail);
+        if (!user) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'No registered EventHub account found with this email address.' 
+            });
+        }
+
+        // Generate 6-digit OTP code
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+        await dbQuery.saveOtp({
+            email: cleanEmail,
+            otp,
+            purpose: 'password_reset',
+            ttlMs: 15 * 60 * 1000 // 15 mins
+        });
+
+        // Dispatch Reset OTP Email
+        await sendPasswordResetOtpEmail({
+            email: cleanEmail,
+            name: user.name,
+            otp,
+            role: user.role,
+            adminId: user.admin_id || user.adminId,
+            memberId: user.member_id || user.memberId
+        });
+
+        res.json({
+            success: true,
+            message: `Password recovery verification code sent to ${cleanEmail}. Check your inbox.`,
+            email: cleanEmail
+        });
+    } catch (err) {
+        next(err);
+    }
+}
+
+async function resetPassword(req, res, next) {
+    try {
+        const { email, otp, newPassword } = req.body;
+        if (!email || !otp || !newPassword) {
+            return res.status(400).json({ success: false, message: 'Email, verification code, and new password are required.' });
+        }
+
+        if (String(newPassword).length < 6) {
+            return res.status(400).json({ success: false, message: 'New password must be at least 6 characters long.' });
+        }
+
+        const cleanEmail = String(email).trim().toLowerCase();
+        const savedOtpRecord = await dbQuery.getOtp({ email: cleanEmail, purpose: 'password_reset' });
+
+        if (!savedOtpRecord) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Invalid or expired reset code. Please request a new verification code.' 
+            });
+        }
+
+        if (savedOtpRecord.otp !== String(otp).trim()) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Incorrect verification code. Please check your email for the correct OTP.' 
+            });
+        }
+
+        // Consume OTP
+        await dbQuery.deleteOtp({ email: cleanEmail, purpose: 'password_reset' });
+
+        const user = await dbQuery.findUserByEmail(cleanEmail);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User account not found.' });
+        }
+
+        const password_hash = await bcrypt.hash(newPassword, 10);
+        await dbQuery.updateUserPassword(user.id, password_hash);
+
+        // Send confirmation email
+        await sendPasswordResetSuccessEmail({
+            email: cleanEmail,
+            name: user.name,
+            role: user.role
+        });
+
+        const token = jwt.sign(
+            { id: user.id, admin_id: user.admin_id, name: user.name, email: user.email, role: user.role },
+            jwtSecret,
+            { expiresIn: '7d' }
+        );
+
+        res.json({
+            success: true,
+            message: 'Your password has been successfully reset! You are now logged in.',
+            token,
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                phone: user.phone,
+                role: user.role,
+                admin_id: user.admin_id || user.adminId,
+                member_id: user.member_id || user.memberId
+            }
+        });
+    } catch (err) {
+        next(err);
+    }
+}
+
+async function sendTemporaryCredentials(req, res, next) {
+    try {
+        const { email } = req.body;
+        if (!email || !String(email).includes('@')) {
+            return res.status(400).json({ success: false, message: 'Please provide a valid email address.' });
+        }
+
+        const cleanEmail = String(email).trim().toLowerCase();
+        const user = await dbQuery.findUserByEmail(cleanEmail);
+        if (!user) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'No registered EventHub account found with this email address.' 
+            });
+        }
+
+        // Generate friendly random temporary password
+        const randomDigits = Math.floor(10000 + Math.random() * 90000);
+        const tempPassword = `EventHub#${randomDigits}`;
+
+        const password_hash = await bcrypt.hash(tempPassword, 10);
+        await dbQuery.updateUserPassword(user.id, password_hash);
+
+        // Dispatch credentials email
+        await sendTemporaryCredentialsEmail({
+            email: cleanEmail,
+            name: user.name,
+            temporaryPassword: tempPassword,
+            role: user.role,
+            adminId: user.admin_id || user.adminId,
+            memberId: user.member_id || user.memberId
+        });
+
+        res.json({
+            success: true,
+            message: `New temporary login credentials have been dispatched to ${cleanEmail}. Please check your email.`,
+            email: cleanEmail
+        });
+    } catch (err) {
+        next(err);
+    }
+}
+
 module.exports = {
     sendOtp,
     verifyOtp,
     resendOtp,
     register,
     login,
-    getMe
+    getMe,
+    forgotPassword,
+    resetPassword,
+    sendTemporaryCredentials
 };

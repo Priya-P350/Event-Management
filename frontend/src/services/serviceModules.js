@@ -6,6 +6,9 @@ export const authService = {
   sendOtp: (email, name, purpose = 'registration') => api.post('/auth/send-otp', { email, name, purpose }),
   verifyOtp: (email, otp, purpose = 'registration') => api.post('/auth/verify-otp', { email, otp, purpose }),
   resendOtp: (email, name, purpose = 'registration') => api.post('/auth/resend-otp', { email, name, purpose }),
+  forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
+  resetPassword: (email, otp, newPassword) => api.post('/auth/reset-password', { email, otp, newPassword }),
+  sendTemporaryCredentials: (email) => api.post('/auth/send-temporary-credentials', { email }),
   getMe: () => api.get('/auth/me'),
 };
 
