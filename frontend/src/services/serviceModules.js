@@ -3,6 +3,9 @@ import api from './api';
 export const authService = {
   login: (email, password) => api.post('/auth/login', { email, password }),
   register: (userData) => api.post('/auth/register', userData),
+  sendOtp: (email, name, purpose = 'registration') => api.post('/auth/send-otp', { email, name, purpose }),
+  verifyOtp: (email, otp, purpose = 'registration') => api.post('/auth/verify-otp', { email, otp, purpose }),
+  resendOtp: (email, name, purpose = 'registration') => api.post('/auth/resend-otp', { email, name, purpose }),
   getMe: () => api.get('/auth/me'),
 };
 

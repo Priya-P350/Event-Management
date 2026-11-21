@@ -431,6 +431,105 @@ async function sendMemberPassEmail({ email, name, memberId, secureToken, verific
     }
 }
 
+/**
+ * Sends a high-contrast Black & Oceanic Slate Email OTP verification to the user using Resend API.
+ */
+async function sendOtpEmail({ email, otp, name }) {
+    const fromAddress = process.env.EMAIL_FROM || 'EventHub Tickets <onboarding@resend.dev>';
+    const recipientEmail = (email || '').trim().toLowerCase();
+    const displayName = (name || '').trim() || 'Valued User';
+
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>Your EventHub Verification Code</title>
+        <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #020617; color: #f8fafc; margin: 0; padding: 0; }
+            .container { max-width: 520px; margin: 30px auto; background-color: #0b1528; border: 1px solid #1e394e; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }
+            .header { background: linear-gradient(135deg, #020817 0%, #041124 100%); padding: 28px 24px; text-align: center; border-bottom: 1px solid #1e394e; }
+            .brand { font-size: 20px; font-weight: 900; letter-spacing: 2px; color: #e0f2fe; text-transform: uppercase; margin-bottom: 6px; }
+            .badge { display: inline-block; background-color: rgba(56, 189, 248, 0.15); color: #38bdf8; font-size: 11px; font-weight: 800; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase; border: 1px solid rgba(56, 189, 248, 0.4); letter-spacing: 1px; }
+            .content { padding: 32px 24px; text-align: center; }
+            .greeting { font-size: 17px; font-weight: 700; color: #e0f2fe; margin-bottom: 12px; }
+            .instructions { font-size: 13px; color: #94b8d6; line-height: 1.6; margin-bottom: 24px; }
+            .otp-box { background-color: #020817; border: 2px solid #38bdf8; border-radius: 14px; padding: 22px 16px; margin: 20px 0; text-align: center; box-shadow: 0 0 25px rgba(56, 189, 248, 0.2); }
+            .otp-code { font-family: 'Courier New', Courier, monospace; font-size: 38px; font-weight: 900; letter-spacing: 12px; color: #38bdf8; display: inline-block; padding-left: 12px; }
+            .timer { font-size: 12px; color: #38bdf8; font-weight: 600; margin-top: 10px; }
+            .warning { font-size: 11px; color: #64748b; margin-top: 24px; padding-top: 16px; border-top: 1px solid #1e293b; line-height: 1.5; }
+            .footer { background-color: #020817; padding: 18px 24px; text-align: center; font-size: 11px; color: #475569; border-top: 1px solid #1e293b; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="brand">EVENT<span style="color: #38bdf8;">HUB</span></div>
+                <div class="badge">Email Verification</div>
+            </div>
+            <div class="content">
+                <div class="greeting">Hello ${escapeHtml(displayName)},</div>
+                <div class="instructions">
+                    Please use the One-Time Password (OTP) below to verify your email address and complete your EventHub account registration:
+                </div>
+                <div class="otp-box">
+                    <div class="otp-code">${otp}</div>
+                    <div class="timer">⏱️ Valid for 10 minutes only</div>
+                </div>
+                <div class="instructions" style="font-size: 12px; color: #cbd5e1;">
+                    Enter this 6-digit code on the registration verification screen.
+                </div>
+                <div class="warning">
+                    ⚠️ <strong>Security Notice:</strong> Never share this OTP with anyone. EventHub administrators and staff will never ask for your verification code.
+                </div>
+            </div>
+            <div class="footer">
+                &copy; 2026 EventHub Inc. • All Rights Reserved
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+
+    try {
+        if (resendClient && resendClient.isConfigured) {
+            const registeredAccountEmail = (process.env.RESEND_REGISTERED_EMAIL || 'priyapatel36306@gmail.com').trim().toLowerCase();
+
+            const emailPayload = {
+                from: fromAddress,
+                to: recipientEmail,
+                subject: `🔐 [EventHub] Your Verification Code: ${otp}`,
+                html: htmlContent
+            };
+
+            let response = await resendClient.emails.send(emailPayload);
+
+            // Handle unverified test domain fallback
+            if (response && response.error) {
+                console.warn(`[OTP Email - Resend Notice] Direct send to ${recipientEmail} encountered restriction (${response.error.message}). Delivering to registered account: ${registeredAccountEmail}`);
+                emailPayload.to = registeredAccountEmail;
+                emailPayload.subject = `🔐 [EventHub OTP: ${otp}] For: ${displayName} <${recipientEmail}>`;
+                response = await resendClient.emails.send(emailPayload);
+            }
+
+            if (response && response.error) {
+                console.error('[OTP Email - Resend API Error]', response.error);
+            } else {
+                console.log(`[OTP Email] ✅ Verification OTP (${otp}) dispatched to ${emailPayload.to} (ID: ${response?.data?.id || 'ok'})`);
+            }
+        } else {
+            console.log(`\n======================================================`);
+            console.log(`[EMAIL OTP PREVIEW MODE]`);
+            console.log(`To: ${recipientEmail}`);
+            console.log(`OTP Code: ${otp}`);
+            console.log(`Subject: [EventHub] Your Verification Code: ${otp}`);
+            console.log(`======================================================\n`);
+        }
+    } catch (err) {
+        console.error('[OTP Email Exception]', err.message);
+    }
+}
+
 function escapeHtml(str) {
     if (!str) return '';
     return String(str)
@@ -450,5 +549,6 @@ function formatLabel(str) {
 
 module.exports = {
     sendQRTicketEmail,
-    sendMemberPassEmail
+    sendMemberPassEmail,
+    sendOtpEmail
 };

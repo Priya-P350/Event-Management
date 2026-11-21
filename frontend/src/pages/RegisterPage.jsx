@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { TextInputField, PasswordField } from '../components/forms';
-import { eventService } from '../services/serviceModules';
+import { authService, eventService } from '../services/serviceModules';
 import { 
   Ticket, User, Mail, Phone, ArrowRight, ShieldCheck, 
   QrCode, UserCheck, Loader2, Download, CheckCircle2, Copy, Sparkles, Check,
-  PlusCircle, LayoutDashboard, MailCheck, ShieldAlert, Calendar, MapPin
+  PlusCircle, LayoutDashboard, MailCheck, ShieldAlert, Calendar, MapPin,
+  KeyRound, RefreshCw, ArrowLeft, Clock
 } from 'lucide-react';
 
 export const RegisterPage = () => {
@@ -17,9 +18,29 @@ export const RegisterPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
+  const [step, setStep] = useState('form'); // 'form' | 'otp'
+  const [pendingData, setPendingData] = useState(null);
+  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [resendCountdown, setResendCountdown] = useState(0);
+  const [isResending, setIsResending] = useState(false);
+  const [copied, setCopied] = useState(false);
+
   const [registeredUser, setRegisteredUser] = useState(null);
+  const [registeredEvent, setRegisteredEvent] = useState(null);
+  const [registeredTicket, setRegisteredTicket] = useState(null);
   const [accountType, setAccountType] = useState('attendee');
   const [accountTypeError, setAccountTypeError] = useState(false);
+
+  // 6 refs for OTP digits input boxes
+  const otp0Ref = useRef(null);
+  const otp1Ref = useRef(null);
+  const otp2Ref = useRef(null);
+  const otp3Ref = useRef(null);
+  const otp4Ref = useRef(null);
+  const otp5Ref = useRef(null);
+  const otpRefs = [otp0Ref, otp1Ref, otp2Ref, otp3Ref, otp4Ref, otp5Ref];
 
   const {
     register,
@@ -36,6 +57,29 @@ export const RegisterPage = () => {
       role: 'attendee'
     }
   });
+
+  // Countdown timer for OTP resend
+  useEffect(() => {
+    let interval = null;
+    if (resendCountdown > 0) {
+      interval = setInterval(() => {
+        setResendCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [resendCountdown]);
+
+  // Focus the first OTP box when transitioning to OTP step
+  useEffect(() => {
+    if (step === 'otp') {
+      const timer = setTimeout(() => {
+        otpRefs[0]?.current?.focus();
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [step]);
 
   const roleOptions = [
     { value: 'attendee', label: 'Attendee', icon: UserCheck, badge: 'Passes' },
@@ -55,40 +99,162 @@ export const RegisterPage = () => {
     setAccountTypeError(false);
   };
 
+  // Step 1: Form submission -> triggers OTP email
   const onSubmit = async (data) => {
-    // Validate account type selection
     if (!accountType) {
       setAccountTypeError(true);
       toast.error('Please select an account type');
       return;
     }
 
+    const cleanEmail = data.email.trim().toLowerCase();
     const fullName = `${data.firstName.trim()} ${data.lastName.trim()}`.trim() || 'New User';
 
+    setIsSendingOtp(true);
+    try {
+      const res = await authService.sendOtp(cleanEmail, fullName, 'registration');
+      if (res.success) {
+        setPendingData({
+          firstName: data.firstName.trim(),
+          lastName: data.lastName.trim(),
+          fullName,
+          email: cleanEmail,
+          phone: data.phone.trim(),
+          password: data.password,
+          role: accountType
+        });
+        setOtpDigits(['', '', '', '', '', '']);
+        setStep('otp');
+        setResendCountdown(60);
+        toast.success(`Verification code sent to ${cleanEmail}. Please check your email inbox!`);
+      } else {
+        toast.error(res.message || 'Failed to send verification code.');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Failed to send verification code.');
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
+  // Handle individual digit input with auto-advance and backspace support
+  const handleOtpChange = (index, value) => {
+    const clean = value.replace(/\D/g, '');
+    if (!clean) {
+      const newDigits = [...otpDigits];
+      newDigits[index] = '';
+      setOtpDigits(newDigits);
+      return;
+    }
+
+    if (clean.length > 1) {
+      // Pasted multiple digits into single input
+      const chars = clean.slice(0, 6).split('');
+      const newDigits = [...otpDigits];
+      for (let i = 0; i < 6; i++) {
+        newDigits[i] = chars[i] || '';
+      }
+      setOtpDigits(newDigits);
+      const nextIndex = Math.min(chars.length, 5);
+      otpRefs[nextIndex]?.current?.focus();
+      return;
+    }
+
+    const newDigits = [...otpDigits];
+    newDigits[index] = clean;
+    setOtpDigits(newDigits);
+
+    if (index < 5 && clean) {
+      otpRefs[index + 1]?.current?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
+      otpRefs[index - 1]?.current?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (!pasted) return;
+    const chars = pasted.split('');
+    const newDigits = [...otpDigits];
+    for (let i = 0; i < 6; i++) {
+      newDigits[i] = chars[i] || '';
+    }
+    setOtpDigits(newDigits);
+    const nextIndex = Math.min(chars.length, 5);
+    otpRefs[nextIndex]?.current?.focus();
+  };
+
+  // Resend OTP
+  const handleResendOtp = async () => {
+    if (resendCountdown > 0 || isResending || !pendingData) return;
+    setIsResending(true);
+    try {
+      const res = await authService.resendOtp(pendingData.email, pendingData.fullName, 'registration');
+      if (res.success) {
+        setResendCountdown(60);
+        setOtpDigits(['', '', '', '', '', '']);
+        otpRefs[0]?.current?.focus();
+        toast.success(`New verification code sent to ${pendingData.email}!`);
+      } else {
+        toast.error(res.message || 'Failed to resend code.');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Failed to resend verification code.');
+    } finally {
+      setIsResending(false);
+    }
+  };
+
+  // Step 2: Verify OTP and finalize registration
+  const handleVerifyAndRegister = async (e) => {
+    if (e) e.preventDefault();
+    const code = otpDigits.join('').trim();
+    if (code.length !== 6) {
+      toast.error('Please enter the complete 6-digit OTP code.');
+      return;
+    }
+
+    if (!pendingData) {
+      toast.error('Registration session expired. Please re-enter your details.');
+      setStep('form');
+      return;
+    }
+
+    setIsVerifying(true);
     try {
       const res = await registerAuth({
-        name: fullName,
-        email: data.email.trim(),
-        phone: data.phone.trim(),
-        password: data.password,
-        role: accountType
+        name: pendingData.fullName,
+        email: pendingData.email,
+        phone: pendingData.phone,
+        password: pendingData.password,
+        role: pendingData.role,
+        otp: code
       });
 
       if (res.success && res.user) {
-        if (accountType === 'attendee') {
-          toast.success(`Welcome to EventHub, ${fullName}! Account created. Explore events to register for your favorite event!`);
+        if (pendingData.role === 'attendee') {
+          toast.success(`Welcome to EventHub, ${pendingData.fullName}! Account created. Explore events to register for your favorite event!`);
           navigate('/events');
           return;
-        } else if (accountType === 'organizer' || ['organizer', 'event_admin'].includes(res.user.role)) {
-          toast.success(`Organizer account created! Welcome to EventHub, ${fullName}!`);
+        } else if (pendingData.role === 'organizer' || ['organizer', 'event_admin'].includes(res.user.role)) {
+          toast.success(`Organizer account created! Welcome to EventHub, ${pendingData.fullName}!`);
           setRegisteredUser(res.user);
-        } else if (accountType === 'gate_staff' || ['gate_staff', 'scanner_staff'].includes(res.user.role)) {
-          toast.success(`Gate scanner staff account activated for ${fullName}!`);
+        } else if (pendingData.role === 'gate_staff' || ['gate_staff', 'scanner_staff'].includes(res.user.role)) {
+          toast.success(`Gate scanner staff account activated for ${pendingData.fullName}!`);
           setRegisteredUser(res.user);
         }
+      } else {
+        toast.error(res.message || 'Registration verification failed.');
       }
     } catch (err) {
-      toast.error(err.message || 'Registration failed.');
+      toast.error(err.message || 'Incorrect verification code. Please check your email.');
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -121,12 +287,18 @@ export const RegisterPage = () => {
       {/* Dynamic Header */}
       <div className="sm:mx-auto sm:w-full sm:max-w-md space-y-4 text-center mb-8">
         <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#00f2fe] to-[#0284c7] text-[#020817] flex items-center justify-center mx-auto shadow-[0_0_20px_rgba(0,242,254,0.4)] transition-transform duration-300 hover:scale-105">
-          {isOrganizer ? (
-            <ShieldCheck className="w-7 h-7" />
-          ) : isStaff ? (
-            <QrCode className="w-7 h-7" />
+          {registeredUser ? (
+            isOrganizer ? (
+              <ShieldCheck className="w-7 h-7" />
+            ) : isStaff ? (
+              <QrCode className="w-7 h-7" />
+            ) : (
+              <Ticket className="w-7 h-7" />
+            )
+          ) : step === 'otp' ? (
+            <MailCheck className="w-7 h-7" />
           ) : (
-            <Ticket className="w-7 h-7" />
+            <UserCheck className="w-7 h-7" />
           )}
         </div>
 
@@ -135,6 +307,8 @@ export const RegisterPage = () => {
             isOrganizer ? 'Organizer Portal Activated' :
             isStaff ? 'Gate Staff Console Ready' :
             'Your Digital QR Pass'
+          ) : step === 'otp' ? (
+            'Verify Your Email'
           ) : (
             'Create Account on EventHub'
           )}
@@ -145,6 +319,8 @@ export const RegisterPage = () => {
             isOrganizer ? 'Your event creator account is live. You can now create and manage events without needing an admission pass.' :
             isStaff ? 'Your scanner staff account is ready. Open the gate scanner to verify attendee passes.' :
             'Your unique Member ID and admission QR code have been issued, displayed below, and dispatched to your registered email.'
+          ) : step === 'otp' ? (
+            'Enter the 6-digit verification code sent to your email to activate your account.'
           ) : (
             'Register yourself to access role-based capabilities, instant event passes, and gate entry services.'
           )}
@@ -476,6 +652,117 @@ export const RegisterPage = () => {
           )}
 
         </div>
+      ) : step === 'otp' ? (
+        /* STEP 2: EMAIL OTP VERIFICATION SCREEN */
+        <div className="max-w-md mx-auto w-full bg-[#041124]/95 backdrop-blur-2xl p-7 sm:p-9 rounded-3xl border border-cyan-500/30 space-y-6 shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="absolute top-0 right-0 w-44 h-44 bg-cyan-400/10 rounded-full blur-3xl pointer-events-none"></div>
+
+          <div className="text-center space-y-3">
+            <div className="w-16 h-16 rounded-2xl bg-cyan-950/80 border border-cyan-500/30 flex items-center justify-center mx-auto text-[#00f2fe] shadow-[0_0_25px_rgba(0,242,254,0.3)]">
+              <MailCheck className="w-8 h-8" />
+            </div>
+            
+            <div className="space-y-1">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#38bdf8] bg-cyan-950/60 px-2.5 py-0.5 rounded-full border border-cyan-500/20 inline-block">
+                Email Authentication
+              </span>
+              <h2 className="text-2xl font-black text-[#e0f2fe] tracking-tight">Check Your Email</h2>
+            </div>
+            
+            <p className="text-xs text-[#94b8d6] leading-relaxed">
+              We have sent a secure 6-digit verification code to
+            </p>
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#020817] border border-cyan-500/30 font-mono text-xs font-bold text-[#38bdf8]">
+              <Mail className="w-3.5 h-3.5 text-[#00f2fe]" />
+              <span className="text-white font-semibold">{pendingData?.email}</span>
+            </div>
+          </div>
+
+          {/* OTP 6-Digit PIN Boxes */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-center gap-2 sm:gap-2.5">
+              {otpDigits.map((digit, idx) => (
+                <input
+                  key={idx}
+                  ref={otpRefs[idx]}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => handleOtpChange(idx, e.target.value)}
+                  onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                  onPaste={handleOtpPaste}
+                  className={`w-11 h-14 sm:w-12 sm:h-16 text-center text-xl sm:text-2xl font-mono font-black rounded-xl border transition-all duration-200 outline-none select-none ${
+                    digit
+                      ? 'bg-cyan-950/80 text-[#38bdf8] border-[#38bdf8] shadow-[0_0_15px_rgba(56,189,248,0.4)] ring-1 ring-[#38bdf8]'
+                      : 'bg-[#020817] text-[#e0f2fe] border-cyan-500/25 focus:border-[#38bdf8] focus:ring-1 focus:ring-[#38bdf8]'
+                  }`}
+                />
+              ))}
+            </div>
+
+            <div className="flex items-center justify-center gap-1.5 text-[11px] text-[#94b8d6]">
+              <Clock className="w-3.5 h-3.5 text-[#38bdf8]" />
+              <span>Valid for 10 minutes. Check spam folder if not received.</span>
+            </div>
+          </div>
+
+          {/* Verify & Complete Button */}
+          <div className="space-y-3 pt-2">
+            <button
+              type="button"
+              onClick={handleVerifyAndRegister}
+              disabled={otpDigits.join('').length !== 6 || isVerifying}
+              className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-[#00f2fe] to-[#0284c7] hover:from-[#38bdf8] hover:to-[#00f2fe] text-[#020817] font-black text-xs transition-all duration-200 flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(0,242,254,0.35)] border border-[#38bdf8] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {isVerifying ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-[#020817]" />
+                  Verifying OTP & Activating Account...
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="w-4 h-4 text-[#020817]" />
+                  Verify OTP & Complete Registration
+                </>
+              )}
+            </button>
+
+            {/* Resend and Timer */}
+            <div className="flex items-center justify-between text-xs pt-1 px-1">
+              <button
+                type="button"
+                onClick={() => setStep('form')}
+                className="text-[#94b8d6] hover:text-[#e0f2fe] flex items-center gap-1.5 transition-colors cursor-pointer text-xs"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" /> Back to Edit Details
+              </button>
+
+              {resendCountdown > 0 ? (
+                <span className="text-[#94b8d6] text-xs font-mono flex items-center gap-1">
+                  Resend in <span className="text-[#38bdf8] font-bold">{resendCountdown}s</span>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  disabled={isResending}
+                  className="text-[#38bdf8] hover:text-[#00f2fe] font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {isResending ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5" /> Resend Code
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       ) : (
         /* REGISTRATION FORM */
         <div className="max-w-5xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
@@ -636,25 +923,22 @@ export const RegisterPage = () => {
 
                 <button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isSendingOtp}
                   className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-[#00f2fe] to-[#0284c7] hover:from-[#38bdf8] hover:to-[#00f2fe] text-[#020817] font-black text-xs transition-all duration-200 flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(0,242,254,0.35)] border border-[#38bdf8] disabled:opacity-50 cursor-pointer mt-2"
                 >
-                  {isSubmitting ? (
+                  {isSubmitting || isSendingOtp ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin text-[#020817]" />
-                      {accountType === 'organizer' 
-                        ? 'Activating Organizer Profile...' 
-                        : accountType === 'gate_staff'
-                        ? 'Activating Gate Staff...'
-                        : 'Creating Attendee Profile...'}
+                      Sending Verification Code to Email...
                     </>
                   ) : (
                     <>
+                      <MailCheck className="w-4 h-4 text-[#020817]" />
                       {accountType === 'organizer' 
-                        ? 'Create Organizer Account & Dashboard' 
+                        ? 'Verify Email & Create Organizer Account' 
                         : accountType === 'gate_staff'
-                        ? 'Create Gate Staff Account'
-                        : 'Create Attendee Account & Explore Events'}
+                        ? 'Verify Email & Create Gate Staff Account'
+                        : 'Verify Email & Create Attendee Account'}
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}

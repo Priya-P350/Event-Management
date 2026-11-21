@@ -5,6 +5,7 @@ const Ticket = require('./Ticket');
 const Payment = require('./Payment');
 const Attendance = require('./Attendance');
 const EventImage = require('./EventImage');
+const Otp = require('./Otp');
 
 module.exports = {
     User,
@@ -13,5 +14,6 @@ module.exports = {
     Ticket,
     Payment,
     Attendance,
-    EventImage
+    EventImage,
+    Otp
 };

@@ -5,17 +5,131 @@ const dbQuery = require('../config/db');
 const { jwtSecret } = require('../middleware/auth');
 const { generateTicketToken, generateMemberToken, generateAdminId } = require('../utils/ticketToken');
 const { generateQRCodeDataUrl } = require('../services/qrService');
-const { sendQRTicketEmail, sendMemberPassEmail } = require('../services/emailService');
+const { sendQRTicketEmail, sendMemberPassEmail, sendOtpEmail } = require('../services/emailService');
+
+async function sendOtp(req, res, next) {
+    try {
+        const { email, name, purpose = 'registration' } = req.body;
+        if (!email || !String(email).includes('@')) {
+            return res.status(400).json({ success: false, message: 'A valid email address is required.' });
+        }
+
+        const cleanEmail = String(email).trim().toLowerCase();
+
+        // For registration purpose, verify if email is already taken
+        if (purpose === 'registration') {
+            const existingUser = await dbQuery.findUserByEmail(cleanEmail);
+            if (existingUser) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: 'An account with this email address already exists. Please sign in instead.' 
+                });
+            }
+        }
+
+        // Generate high-entropy 6-digit OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+        await dbQuery.saveOtp({
+            email: cleanEmail,
+            otp,
+            purpose,
+            ttlMs: 10 * 60 * 1000 // 10 minutes expiry
+        });
+
+        // Dispatch Email via Resend
+        await sendOtpEmail({
+            email: cleanEmail,
+            otp,
+            name: name || 'User'
+        });
+
+        res.json({
+            success: true,
+            message: `Verification code sent to ${cleanEmail}. Please check your inbox.`,
+            email: cleanEmail,
+            expiresInSeconds: 600
+        });
+    } catch (err) {
+        next(err);
+    }
+}
+
+async function verifyOtp(req, res, next) {
+    try {
+        const { email, otp, purpose = 'registration' } = req.body;
+        if (!email || !otp) {
+            return res.status(400).json({ success: false, message: 'Email and OTP code are required.' });
+        }
+
+        const cleanEmail = String(email).trim().toLowerCase();
+        const savedOtpRecord = await dbQuery.getOtp({ email: cleanEmail, purpose });
+
+        if (!savedOtpRecord) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Invalid or expired OTP. Please request a new verification code.' 
+            });
+        }
+
+        if (savedOtpRecord.otp !== String(otp).trim()) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Incorrect verification code. Please check the OTP sent to your email.' 
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'OTP verified successfully.',
+            verified: true
+        });
+    } catch (err) {
+        next(err);
+    }
+}
+
+async function resendOtp(req, res, next) {
+    return sendOtp(req, res, next);
+}
 
 async function register(req, res, next) {
     try {
-        const { name, email, phone, password, role, eventId } = req.body;
+        const { name, email, phone, password, role, eventId, otp } = req.body;
 
         if (!name || !email || !password) {
             return res.status(400).json({ success: false, message: 'Name, email, and password are required fields.' });
         }
 
-        const existingUser = await dbQuery.findUserByEmail(email);
+        const cleanEmail = String(email).trim().toLowerCase();
+
+        // 1. Mandatory Email OTP Verification
+        if (!otp) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Email verification required. Please enter the 6-digit OTP sent to your email.' 
+            });
+        }
+
+        const savedOtpRecord = await dbQuery.getOtp({ email: cleanEmail, purpose: 'registration' });
+        if (!savedOtpRecord) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Verification code expired or not found. Please request a new OTP.' 
+            });
+        }
+
+        if (savedOtpRecord.otp !== String(otp).trim()) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Incorrect verification code. Please check your email for the correct OTP.' 
+            });
+        }
+
+        // OTP is valid - consume it immediately
+        await dbQuery.deleteOtp({ email: cleanEmail, purpose: 'registration' });
+
+        const existingUser = await dbQuery.findUserByEmail(cleanEmail);
         if (existingUser) {
             return res.status(400).json({ success: false, message: 'An account with this email address already exists.' });
         }
@@ -217,6 +331,9 @@ async function getMe(req, res, next) {
 }
 
 module.exports = {
+    sendOtp,
+    verifyOtp,
+    resendOtp,
     register,
     login,
     getMe

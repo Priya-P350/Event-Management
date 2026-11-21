@@ -220,6 +220,16 @@ function initSqliteTables(db) {
             payload TEXT NOT NULL,
             processed_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
+
+        CREATE TABLE IF NOT EXISTS email_otps (
+            id TEXT PRIMARY KEY,
+            email TEXT NOT NULL,
+            otp TEXT NOT NULL,
+            purpose TEXT NOT NULL DEFAULT 'registration',
+            expires_at INTEGER NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_email_otps ON email_otps(email, purpose);
     `);
 
     // Ensure users and attendance have member QR and admin_id columns in existing database
@@ -1993,6 +2003,82 @@ const dbQuery = {
             payload: typeof eventData.payload === 'string' ? eventData.payload : JSON.stringify(eventData.payload)
         };
         await drizzleDb.insert(t.webhookEvents).values(val);
+    },
+
+    async saveOtp({ email, otp, purpose = 'registration', ttlMs = 10 * 60 * 1000 }) {
+        const cleanEmail = String(email || '').trim().toLowerCase();
+        const expiresAtMs = Date.now() + ttlMs;
+        const id = uuidv4();
+
+        if (mode === 'mongodb' && mongoModels.Otp) {
+            try {
+                await mongoModels.Otp.deleteMany({ email: cleanEmail, purpose });
+                const doc = await mongoModels.Otp.create({
+                    _id: id,
+                    email: cleanEmail,
+                    otp,
+                    purpose,
+                    expires_at: new Date(expiresAtMs)
+                });
+                return { id, email: cleanEmail, otp, purpose, expires_at: doc.expires_at };
+            } catch (err) {
+                console.error('[MongoDB saveOtp Error]', err.message);
+            }
+        }
+
+        try {
+            sqliteDb.prepare('DELETE FROM email_otps WHERE email = ? AND purpose = ?').run(cleanEmail, purpose);
+            sqliteDb.prepare('INSERT INTO email_otps (id, email, otp, purpose, expires_at) VALUES (?, ?, ?, ?, ?)').run(id, cleanEmail, otp, purpose, expiresAtMs);
+            return { id, email: cleanEmail, otp, purpose, expires_at: new Date(expiresAtMs) };
+        } catch (err) {
+            console.error('[SQLite saveOtp Error]', err.message);
+            return null;
+        }
+    },
+
+    async getOtp({ email, purpose = 'registration' }) {
+        const cleanEmail = String(email || '').trim().toLowerCase();
+
+        if (mode === 'mongodb' && mongoModels.Otp) {
+            try {
+                const rec = await mongoModels.Otp.findOne({ 
+                    email: cleanEmail, 
+                    purpose,
+                    expires_at: { $gt: new Date() }
+                }).sort({ created_at: -1 }).lean();
+                if (rec) return { id: rec._id, email: rec.email, otp: rec.otp, expires_at: rec.expires_at };
+            } catch (err) {
+                console.error('[MongoDB getOtp Error]', err.message);
+            }
+        }
+
+        try {
+            const now = Date.now();
+            const row = sqliteDb.prepare('SELECT * FROM email_otps WHERE email = ? AND purpose = ? AND expires_at > ? ORDER BY expires_at DESC LIMIT 1').get(cleanEmail, purpose, now);
+            if (row) return { id: row.id, email: row.email, otp: row.otp, expires_at: new Date(row.expires_at) };
+            return null;
+        } catch (err) {
+            console.error('[SQLite getOtp Error]', err.message);
+            return null;
+        }
+    },
+
+    async deleteOtp({ email, purpose = 'registration' }) {
+        const cleanEmail = String(email || '').trim().toLowerCase();
+
+        if (mode === 'mongodb' && mongoModels.Otp) {
+            try {
+                await mongoModels.Otp.deleteMany({ email: cleanEmail, purpose });
+            } catch (err) {
+                console.error('[MongoDB deleteOtp Error]', err.message);
+            }
+        }
+
+        try {
+            sqliteDb.prepare('DELETE FROM email_otps WHERE email = ? AND purpose = ?').run(cleanEmail, purpose);
+        } catch (err) {
+            console.error('[SQLite deleteOtp Error]', err.message);
+        }
     },
 
     async testConnection() {
